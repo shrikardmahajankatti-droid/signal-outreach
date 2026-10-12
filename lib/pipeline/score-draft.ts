@@ -83,8 +83,12 @@ async function draftEmail(
   knownInvestors: string[]
 ) {
   const db = getDb()
-  const founderRows = await db.select({ name: schema.founders.name, email: schema.founders.email }).from(schema.founders).where(eq(schema.founders.startupId, s.id))
-  const founder = pickFounder(facts, founderRows.filter((f) => f.email).map((f) => f.name))
+  const founderRows = await db
+    .select({ name: schema.founders.name, email: schema.founders.email, emailSource: schema.founders.emailSource, emailStatus: schema.founders.emailStatus })
+    .from(schema.founders)
+    .where(eq(schema.founders.startupId, s.id))
+  const reachable = founderRows.filter((f) => f.email && (f.emailSource !== "hunter" || ["valid", "accept_all"].includes(f.emailStatus ?? "")))
+  const founder = pickFounder(facts, reachable.map((f) => f.name))
   const openers = openerCandidates(facts, research, knownInvestors)
   const footer = renderFooter(rules.footer, { accelerator_name: accelerator.name, unsubscribe_url: unsubscribeUrl(s.id) })
   const openerFacts = [
@@ -125,7 +129,7 @@ async function draftEmail(
 
   const [founderRow] = founder
     ? await db
-        .select({ id: schema.founders.id, email: schema.founders.email })
+        .select({ id: schema.founders.id, email: schema.founders.email, emailSource: schema.founders.emailSource, emailStatus: schema.founders.emailStatus })
         .from(schema.founders)
         .where(and(eq(schema.founders.startupId, s.id), eq(schema.founders.name, founder.name)))
     : []
@@ -135,7 +139,8 @@ async function draftEmail(
     .values({
       startupId: s.id,
       founderId: founderRow?.id ?? null,
-      toEmail: founderRow?.email ?? null, // never invented: Rohit types it in if unknown
+      // Never invented: only a typed, publicly listed or Hunter-verified address is used.
+      toEmail: founderRow && (founderRow.emailSource !== "hunter" || ["valid", "accept_all"].includes(founderRow.emailStatus ?? "")) ? founderRow.email : null,
       subject: email.subject,
       body: email.body,
       openerSource: draft.opener_source,
@@ -251,6 +256,13 @@ async function scoreOne(
   await db.insert(schema.events).values({ startupId: s.id, type: "scored", detail: { score, decision, factor_scores: scored.factor_scores } })
 
   if (decision === "accepted") {
+    // Hunter (if configured) before drafting, so the email greets a founder we can actually reach.
+    try {
+      const { findFounderEmailsWithHunter } = await import("@/lib/research/discover")
+      await findFounderEmailsWithHunter(s.id)
+    } catch (err) {
+      await db.insert(schema.events).values({ startupId: s.id, type: "hunter_error", detail: { message: (err as Error).message } })
+    }
     const { drafted, pass } = await draftEmail(s, facts, research, reasons, env.rules, env.accelerator, env.knownInvestors)
     await db.update(schema.startups).set({ stage: "drafted", dealStage: "draft_ready" }).where(eq(schema.startups.id, s.id))
     if (drafted) await db.insert(schema.events).values({ startupId: s.id, type: "drafted", detail: { checks_pass: pass } })

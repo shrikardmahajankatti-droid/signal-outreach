@@ -5,15 +5,18 @@ import { CheckCircle2, Loader2, Search, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { checkMailDomainAction, findEmailsAction } from "@/app/(app)/outreach/actions"
+import { checkMailDomainAction, findEmailsAction, hunterFindAction, verifyEmailAction } from "@/app/(app)/outreach/actions"
 import type { DraftDetail } from "@/lib/outreach-queries"
 import { cn } from "@/lib/utils"
 
 const KIND_LABEL = { founder: "founder", person: "team member", generic: "company inbox" } as const
 
-function sourceLabel(src: string | null | undefined) {
+const STATUS_LABEL: Record<string, string> = { valid: "verified deliverable", accept_all: "accept-all domain (likely deliverable)", invalid: "invalid", unknown: "unverifiable", webmail: "personal webmail", disposable: "disposable" }
+
+function sourceLabel(src: string | null | undefined, meta?: { score?: number | null; status?: string | null }) {
   if (!src) return null
   if (src === "rohit") return "typed by you"
+  if (src === "hunter") return `Hunter.io${meta?.score != null ? ` · ${meta.score}% confidence` : ""}${meta?.status ? ` · ${STATUS_LABEL[meta.status] ?? meta.status}` : ""}`
   try {
     const u = new URL(src)
     return `found on ${u.hostname.replace(/^www\./, "")}${u.pathname !== "/" ? u.pathname : ""}`
@@ -61,10 +64,14 @@ export function RecipientField({
     return () => clearTimeout(t)
   }, [value])
 
+  const [hunting, startHunt] = useTransition()
+  const [verifying, startVerify] = useTransition()
+  const [verdict, setVerdict] = useState<{ ok: boolean; text: string } | null>(null)
   const source =
-    value && founder?.email === value ? sourceLabel(founder.emailSource) : emailCandidates.find((c) => c.email === value) ? sourceLabel(emailCandidates.find((c) => c.email === value)!.source) : value ? "typed by you" : null
+    value && founder?.email === value ? sourceLabel(founder.emailSource, { score: founder.emailConfidence, status: founder.emailStatus }) : emailCandidates.find((c) => c.email === value) ? sourceLabel(emailCandidates.find((c) => c.email === value)!.source) : value ? "typed by you" : null
   const options = [
-    ...otherFounders.filter((f) => f.email).map((f) => ({ email: f.email!, label: `${f.name} (co-founder)`, source: sourceLabel(f.emailSource) })),
+    ...(founder?.email && founder.email !== value ? [{ email: founder.email, label: founder.name, source: sourceLabel(founder.emailSource, { score: founder.emailConfidence, status: founder.emailStatus }) }] : []),
+    ...otherFounders.filter((f) => f.email).map((f) => ({ email: f.email!, label: `${f.name} (co-founder)`, source: sourceLabel(f.emailSource, { score: f.emailConfidence, status: f.emailStatus }) })),
     ...emailCandidates.filter((c) => c.email !== value).map((c) => ({ email: c.email, label: c.founder ?? KIND_LABEL[c.kind], source: sourceLabel(c.source) })),
   ].filter((o, i, arr) => arr.findIndex((x) => x.email === o.email) === i && o.email !== value)
 
@@ -107,9 +114,45 @@ export function RecipientField({
               className="rounded-md border border-line bg-background px-2 py-1 text-left text-[12px] hover:border-link"
               title={o.source ?? undefined}
             >
-              Use <span className="font-medium">{o.email}</span> <span className="text-text-secondary">· {o.label}</span>
+              Use <span className="font-medium">{o.email}</span> <span className="text-text-secondary">· {o.label}{o.source ? ` · ${o.source}` : ""}</span>
             </button>
           ))}
+          {detail.hunter && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[12px]"
+              disabled={hunting || detail.hunter.left === 0}
+              title={`Hunter.io: ${detail.hunter.left} of ${detail.hunter.cap} lookups left this month`}
+              onClick={() =>
+                startHunt(async () => {
+                  const r = await hunterFindAction(draft.id)
+                  setVerdict({ ok: r.ok, text: r.ok ? "Hunter lookup done" : r.error })
+                  onRefresh()
+                })
+              }
+            >
+              {hunting ? <Loader2 className="animate-spin" /> : <Search />}
+              Find with Hunter <span className="text-text-secondary">({detail.hunter.left} left)</span>
+            </Button>
+          )}
+          {detail.hunter && /\S+@\S+\.\S+/.test(value) && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-[12px]"
+              disabled={verifying || detail.hunter.left === 0}
+              onClick={() =>
+                startVerify(async () => {
+                  const r = await verifyEmailAction(value)
+                  setVerdict(r.ok && r.data ? { ok: r.data.status === "valid" || r.data.status === "accept_all", text: `Hunter: ${STATUS_LABEL[r.data.status] ?? r.data.status}${r.data.score != null ? ` (${r.data.score}%)` : ""}` } : { ok: false, text: r.ok ? "No result" : r.error })
+                  onRefresh()
+                })
+              }
+            >
+              {verifying ? <Loader2 className="animate-spin" /> : <CheckCircle2 />} Verify address
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"
@@ -124,6 +167,7 @@ export function RecipientField({
         </div>
       )}
 
+      {verdict && <p className={cn("text-[12px]", verdict.ok ? "text-status-sent" : "text-status-rejected")}>{verdict.text}</p>}
       <p className={cn("text-[12px]", demoMode ? "text-status-maybe" : "text-text-secondary")}>
         {demoMode
           ? `DEMO MODE: delivered to ${testInbox ?? "the test inbox"}; the banner will show ${value || "“email needed”"} as the intended recipient.`

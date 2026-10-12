@@ -15,6 +15,7 @@ const INTEGRATIONS: { name: string; env: string[]; note?: string }[] = [
   { name: "Resend webhook", env: ["RESEND_WEBHOOK_SECRET"], note: "/api/resend/webhook" },
   { name: "HubSpot", env: ["HUBSPOT_ACCESS_TOKEN"] },
   { name: "Tavily", env: ["TAVILY_API_KEY"] },
+  { name: "Hunter.io (founder emails)", env: ["HUNTER_API_KEY"] },
   { name: "GNews", env: ["GNEWS_API_KEY"] },
   { name: "NewsData.io", env: ["NEWSDATA_API_KEY"] },
   { name: "Cron secret", env: ["CRON_SECRET"] },
@@ -25,7 +26,14 @@ function Dot({ ok }: { ok: boolean }) {
 }
 
 export default async function SettingsPage() {
-  const [dbOk, demo, testInbox] = await Promise.all([databaseReachable(), getDemoMode(), getTestInbox()])
+  const { hunterAccount, hunterBudget } = await import("@/lib/research/hunter")
+  const [dbOk, demo, testInbox, hunter, hunterLocal] = await Promise.all([
+    databaseReachable(),
+    getDemoMode(),
+    getTestInbox(),
+    hunterAccount().catch(() => null),
+    hunterBudget().catch(() => null),
+  ])
   let data
   try {
     const db = getDb()
@@ -57,7 +65,16 @@ export default async function SettingsPage() {
             const ok = i.env.every((k) => Boolean(process.env[k]))
             return (
               <div key={i.name} className="flex items-center justify-between px-4 py-2.5 text-[13px]">
-                <span className="font-medium">{i.name}{i.note && <span className="ml-2 font-normal text-[12px] text-text-secondary">{i.note}</span>}</span>
+                <span className="font-medium">
+                  {i.name}
+                  {i.note && <span className="ml-2 font-normal text-[12px] text-text-secondary">{i.note}</span>}
+                  {i.env[0] === "HUNTER_API_KEY" && ok && (
+                    <span className="ml-2 font-normal text-[12px] text-text-secondary">
+                      {hunter ? `${hunter.plan} plan · ${hunter.searchesLeft ?? "?"} searches, ${hunter.verificationsLeft ?? "?"} verifications left` : ""}
+                      {hunterLocal ? ` · Signal cap ${hunterLocal.used}/${hunterLocal.cap} this month` : ""}
+                    </span>
+                  )}
+                </span>
                 <span className="flex items-center gap-2 text-text-secondary"><Dot ok={ok} />{ok ? "Configured" : `Missing ${i.env.filter((k) => !process.env[k]).join(", ")}`}</span>
               </div>
             )

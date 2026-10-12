@@ -29,6 +29,13 @@
       "when": 1791799267756,
       "tag": "0003_gtm_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791800451627,
+      "tag": "0004_founder_email_quality",
+      "breakpoints": true
     }
   ]
 }

@@ -93,3 +93,27 @@ export async function checkMailDomainAction(email: string): Promise<ActionResult
   const { domainAcceptsMail } = await import("@/lib/research/email-finder")
   return { ok: true, data: { accepts: await domainAcceptsMail(email.trim() || null) } }
 }
+
+// Hunter.io lookup for this draft's founder (1 credit, only charged on a hit).
+export async function hunterFindAction(draftId: number) {
+  return run(async () => {
+    const [d] = await getDb().select({ startupId: schema.drafts.startupId, founderId: schema.drafts.founderId }).from(schema.drafts).where(eq(schema.drafts.id, draftId))
+    if (!d) throw new Error("Draft not found")
+    const { findFounderEmailsWithHunter } = await import("@/lib/research/discover")
+    const r = await findFounderEmailsWithHunter(d.startupId, { maxLookups: 1, onlyFounderId: d.founderId ?? undefined })
+    if (r.looked === 0) throw new Error("Nothing to look up: the founder already has an address from you or Hunter, or only a first name is known")
+    return r
+  }, "Hunter lookup done")
+}
+
+export async function verifyEmailAction(email: string): Promise<ActionResult<{ status: string; result: string | null; score: number | null }>> {
+  try {
+    const { hunterVerify } = await import("@/lib/research/hunter")
+    const r = await hunterVerify(email.trim())
+    const [founder] = await getDb().select({ id: schema.founders.id }).from(schema.founders).where(eq(schema.founders.email, email.trim()))
+    if (founder) await getDb().update(schema.founders).set({ emailStatus: r.status, emailConfidence: r.score }).where(eq(schema.founders.id, founder.id))
+    return { ok: true, data: r }
+  } catch (err) {
+    return { ok: false, error: (err as Error).message }
+  }
+}

@@ -143,6 +143,9 @@ export const founders = pgTable(
     email: text("email"),
     // Where the email came from: "rohit" (typed in), or the public page/search result it was found on.
     emailSource: text("email_source"),
+    // Finder confidence (0–100) and deliverability verdict, e.g. Hunter "valid" / "accept_all" / "invalid".
+    emailConfidence: integer("email_confidence"),
+    emailStatus: text("email_status"),
     linkedinUrl: text("linkedin_url"),
     linkedinMatchConfidence: real("linkedin_match_confidence"),
     linkedinVerified: boolean("linkedin_verified").notNull().default(false),

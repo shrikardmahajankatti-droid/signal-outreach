@@ -131,9 +131,24 @@ export async function getDraftDetail(draftId: number) {
       hubspotUrl: hubspotDealUrl(s.hubspotDealId, account),
     },
     founder: founder
-      ? { name: founder.name, title: founder.title, linkedinUrl: founder.linkedinUrl, confidence: founder.linkedinMatchConfidence, email: founder.email, emailSource: founder.emailSource }
+      ? {
+          name: founder.name,
+          title: founder.title,
+          linkedinUrl: founder.linkedinUrl,
+          confidence: founder.linkedinMatchConfidence,
+          email: founder.email,
+          emailSource: founder.emailSource,
+          emailConfidence: founder.emailConfidence,
+          emailStatus: founder.emailStatus,
+        }
       : null,
-    otherFounders: founders.filter((f) => f.id !== founder?.id).map((f) => ({ name: f.name, email: f.email, emailSource: f.emailSource })),
+    otherFounders: founders
+      .filter((f) => f.id !== founder?.id)
+      .map((f) => ({ name: f.name, email: f.email, emailSource: f.emailSource, emailConfidence: f.emailConfidence, emailStatus: f.emailStatus })),
+    hunter: await (async () => {
+      const { hunterEnabled, hunterBudget } = await import("@/lib/research/hunter")
+      return hunterEnabled() ? await hunterBudget() : null
+    })(),
     emailCandidates: ((s.research as { emails?: EmailCandidate[] } | null)?.emails ?? []) as EmailCandidate[],
     emailsCheckedAt: (s.research as { emails_checked_at?: string } | null)?.emails_checked_at ?? null,
     followups: followups.map((f) => ({
