@@ -268,3 +268,15 @@ describe("merging never introduces a hard-gate fact", () => {
     expect(mergeFacts(base, later).excluded_sector_match).toBeNull()
   })
 })
+
+describe("cron schedule end date", async () => {
+  const { scheduleEnded } = await import("@/lib/pipeline/schedule")
+  it("runs through 30 Nov 2026 IST and stops from 1 Dec", () => {
+    const prev = process.env.CRON_END_DATE
+    process.env.CRON_END_DATE = "2026-11-30"
+    expect(scheduleEnded(new Date("2026-11-30T00:30:00Z")).ended).toBe(false) // 6:00 IST on 30 Nov
+    expect(scheduleEnded(new Date("2026-11-30T18:29:00Z")).ended).toBe(false) // 23:59 IST on 30 Nov
+    expect(scheduleEnded(new Date("2026-11-30T18:31:00Z")).ended).toBe(true) // 00:01 IST on 1 Dec
+    process.env.CRON_END_DATE = prev
+  })
+})

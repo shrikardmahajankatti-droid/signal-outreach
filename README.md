@@ -22,7 +22,7 @@ Every morning Signal finds startups that announced a **pre-seed / seed** round i
 | 9 | **Human gate**: approve / edit / skip in the Outreach editor | `app/(app)/outreach/[id]` → `lib/outreach.ts` |
 | 10 | Resend sends; webhook marks delivered/bounced; HubSpot → **Email sent**; day 3/7/14 follow-ups unless the deal is at Replied or later | `/api/resend/webhook`, `/api/cron/followups` |
 
-Crons (`vercel.json`, UTC): ingest 00:30 · extract 00:40 · qualify 00:50 · enrich 01:00 · score-draft 01:10 (= 6:00–6:40 IST) · summary 01:20 · follow-ups 04:30. Every stage reads pending rows from Neon, works in batches, is idempotent, and checks `Authorization: Bearer $CRON_SECRET`. **Run pipeline now** (top bar) runs steps 2–7 in one request.
+Crons (`vercel.json`, UTC): ingest 00:30 · extract 00:40 · qualify 00:50 · enrich 01:00 · score-draft 01:10 (= 6:00–6:40 IST) · summary 01:20 (6:50 IST) · follow-ups 04:30 (10:00 IST). They run daily **through `CRON_END_DATE` (2026-11-30, IST)**; after that every cron returns "schedule ended" and does nothing. Vercel Hobby fires each cron at some point within its scheduled hour, so a pipeline cron first runs every earlier stage in order. Whichever fires first does the work in the right sequence, and the rest find nothing pending. Every stage reads pending rows from Neon, works in batches, is idempotent, and checks `Authorization: Bearer $CRON_SECRET`. **Run pipeline now** (top bar) runs steps 2–7 in one request.
 
 ## Stack
 
