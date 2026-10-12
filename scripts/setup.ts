@@ -109,7 +109,7 @@ const SOURCES = [
     url: "https://news.google.com/rss/search?q=%22raises%22+%22seed%22+startup+India+when:2d&hl=en-IN&gl=IN&ceid=IN:en",
   },
   { name: "GNews: seed rounds", type: "gnews", url: "startup raises seed round" },
-  { name: "GNews: pre-seed", type: "gnews", url: "startup raises pre-seed" },
+  { name: "GNews: pre-seed", type: "gnews", url: 'startup raises "pre-seed"' },
   { name: "NewsData: seed funding India", type: "newsdata", url: "seed funding startup" },
 ]
 
