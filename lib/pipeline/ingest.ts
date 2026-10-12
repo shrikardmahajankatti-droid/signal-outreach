@@ -27,10 +27,15 @@ export async function runIngest(): Promise<StageResult> {
 
   // 1. News sources (RSS + APIs), in parallel.
   const sources = await db.select().from(schema.sources).where(eq(schema.sources.active, true))
+  // GNews' free tier rejects concurrent requests, so its queries are spaced 1.5 s apart.
+  let gnewsSlot = 0
   const results = await Promise.allSettled(
-    sources.map((s) => {
+    sources.map(async (s) => {
       if (s.type === "rss") return fetchRss(s.name, s.url)
-      if (s.type === "gnews") return fetchGNews(s.name, s.url, cfg.fresh_window_hours)
+      if (s.type === "gnews") {
+        await new Promise((r) => setTimeout(r, 1500 * gnewsSlot++))
+        return fetchGNews(s.name, s.url, cfg.fresh_window_hours)
+      }
       if (s.type === "newsdata") return fetchNewsData(s.name, s.url)
       return Promise.reject(new Error(`Unknown source type ${s.type}`))
     })
