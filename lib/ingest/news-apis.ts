@@ -9,7 +9,7 @@ export async function fetchGNews(name: string, query: string, sinceHours: number
   const from = new Date(Date.now() - sinceHours * 3600_000).toISOString().replace(/\.\d{3}Z$/, "Z")
   const params = new URLSearchParams({ q: query, lang: "en", max: "25", from, sortby: "publishedAt", apikey: key })
   const res = await fetchWithTimeout(`https://gnews.io/api/v4/search?${params}`)
-  if (!res.ok) throw new Error(`GNews HTTP ${res.status}`)
+  if (!res.ok) throw new Error(`GNews HTTP ${res.status}: ${(await res.text()).slice(0, 160)}`)
   const data = (await res.json()) as { articles?: GNewsArticle[] }
   return (data.articles ?? []).map((a) => ({
     url: a.url,
@@ -28,7 +28,7 @@ export async function fetchNewsData(name: string, query: string): Promise<RawIte
   if (!key) throw new SourceSkipped("NEWSDATA_API_KEY not set")
   const params = new URLSearchParams({ apikey: key, q: query, language: "en", category: "business,technology" })
   const res = await fetchWithTimeout(`https://newsdata.io/api/1/latest?${params}`)
-  if (!res.ok) throw new Error(`NewsData HTTP ${res.status}`)
+  if (!res.ok) throw new Error(`NewsData HTTP ${res.status}: ${(await res.text()).slice(0, 160)}`)
   const data = (await res.json()) as { results?: NewsDataArticle[] }
   return (data.results ?? []).map((a) => ({
     url: a.link,
