@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Signal: Timed Funding Outreach Engine
 
-## Getting Started
+Every morning Signal finds startups that announced a **pre-seed / seed** round in the last 24–48 hours, rejects the ones that don't fit, researches the ones that do, and drafts a personal outreach email for each. Rohit approves every email before it is sent.
 
-First, run the development server:
+> Status: **Phase 1, scaffold.** Layout, design tokens and empty pages are live. The database and pipeline stages are added in later phases.
+
+## Stack
+
+Next.js 15 (App Router, TypeScript) · Tailwind CSS v4 · shadcn/ui (Radix) · lucide-react · Recharts · Neon + Drizzle · Gemini Flash (`@google/genai`) · Jina Reader · Tavily · Resend · HubSpot · Vercel Cron
+
+## Local setup
 
 ```bash
+npm install
+cp .env.example .env.local   # fill in keys
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Secrets live only in `.env.local` (git-ignored) and Vercel environment variables.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Components map
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Area | Path |
+|---|---|
+| App shell (sidebar, top bar, mobile nav) | `components/shell/*`, `app/layout.tsx` |
+| Shared UI (status pill, KPI card, empty/error states, skeletons) | `components/signal/*` |
+| shadcn primitives | `components/ui/*` |
+| Pages | `app/{page,pipeline,outreach,leads,thesis,analytics,settings}` |
+| "Run pipeline now" | `components/shell/run-pipeline-button.tsx` → `app/api/pipeline/run` |
 
-## Learn More
+## Decisions and notes
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Separate repo.** Signal lives in its own repository, not inside any existing project.
+- **Light theme only.** Dark mode is optional in the spec and is skipped for now.
+- **shadcn CLI quirk.** The CLI rewrote `@/lib/utils` imports to a stray npm package called `cn`. Imports were repointed to `lib/utils.ts` and that package removed. `shadcn` stays as a dev dependency only for its `shadcn/tailwind.css` variants.
+- **Dynamic rendering.** All pages render per request (`force-dynamic`) because they read live data from Neon.

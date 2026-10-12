@@ -1,103 +1,61 @@
-import Image from "next/image";
+import { Activity, Inbox } from "lucide-react"
+import { KpiCard } from "@/components/signal/kpi-card"
+import { SectionCard } from "@/components/signal/section-card"
+import { EmptyState } from "@/components/signal/empty-state"
 
-export default function Home() {
+function greeting(now: Date) {
+  const h = Number(new Intl.DateTimeFormat("en-IN", { hour: "numeric", hour12: false, timeZone: "Asia/Kolkata" }).format(now))
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"
+}
+
+const FUNNEL = [
+  { label: "Articles", value: 0 },
+  { label: "Funding news", value: 0 },
+  { label: "Rejected", value: 0 },
+  { label: "Drafts", value: 0 },
+]
+
+export default function HomePage() {
+  const now = new Date()
+  const date = new Intl.DateTimeFormat("en-IN", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Kolkata" }).format(now)
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-semibold tracking-tight">{greeting(now)}, Rohit</h2>
+        <p className="mt-1 text-sm text-text-secondary">{date}</p>
+      </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Drafts ready" value="0" hint="Waiting for your approval" />
+        <KpiCard label="Sent this week" value="0" />
+        <KpiCard label="Reply rate" value="—" />
+        <KpiCard label="Avg hours, announcement → email" value="—" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <SectionCard title="Today's run" className="lg:col-span-2" bodyClassName="p-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {FUNNEL.map((step, i) => (
+              <div key={step.label} className="rounded-md border border-line bg-background p-3">
+                <p className="text-xs text-text-secondary">
+                  {i + 1}. {step.label}
+                </p>
+                <p className="mt-1 text-xl font-semibold tabular-nums">{step.value}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-text-secondary">No run yet today. The pipeline runs daily at 6:00 AM IST.</p>
+        </SectionCard>
+
+        <SectionCard title="Recent activity">
+          <EmptyState icon={Activity} title="No activity yet" description="Approvals, sends and replies will show up here." />
+        </SectionCard>
+      </div>
+
+      <SectionCard title="Drafts waiting for you">
+        <EmptyState icon={Inbox} title="Nothing to review" description="When the pipeline finds a fit, a ready-to-approve email lands here." />
+      </SectionCard>
     </div>
-  );
+  )
 }
