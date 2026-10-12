@@ -71,10 +71,9 @@ export async function hunterAccount(): Promise<{ plan: string; searchesLeft: num
   if (!key) return null
   const res = await fetchWithTimeout(`${BASE}/account?api_key=${key}`, { timeoutMs: 10000 })
   if (!res.ok) return null
-  const d = ((await res.json()) as {
-    data?: { plan_name?: string; requests?: { searches?: { available?: number; used?: number }; verifications?: { available?: number; used?: number }; credits?: { available?: number; used?: number } } }
-  }).data
+  type Bucket = { available?: number; used?: number; remaining?: number }
+  const d = ((await res.json()) as { data?: { plan_name?: string; requests?: { searches?: Bucket; verifications?: Bucket; credits?: Bucket } } }).data
   const r = d?.requests
-  const left = (x?: { available?: number; used?: number }) => (x?.available !== undefined ? x.available - (x.used ?? 0) : null)
-  return { plan: d?.plan_name ?? "?", searchesLeft: left(r?.searches ?? r?.credits), verificationsLeft: left(r?.verifications ?? r?.credits) }
+  const left = (x?: Bucket) => (x?.remaining !== undefined ? x.remaining : x?.available !== undefined ? x.available - (x.used ?? 0) : null)
+  return { plan: d?.plan_name ?? "?", searchesLeft: left(r?.credits ?? r?.searches), verificationsLeft: left(r?.verifications) }
 }
