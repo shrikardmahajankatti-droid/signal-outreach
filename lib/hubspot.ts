@@ -195,7 +195,10 @@ export async function syncStartupToHubSpot(startupId: number): Promise<{ company
     await associate("deals", dealId, "contacts", contactId)
     await associate("contacts", contactId, "companies", companyId)
   }
-  await db.update(schema.startups).set({ hubspotCompanyId: companyId, hubspotDealId: dealId }).where(eq(schema.startups.id, s.id))
+  await db
+    .update(schema.startups)
+    .set({ hubspotCompanyId: companyId, hubspotDealId: dealId, ...(s.dealStage ? {} : { dealStage: "draft_ready" }) })
+    .where(eq(schema.startups.id, s.id))
   return { companyId, dealId, contactId }
 }
 

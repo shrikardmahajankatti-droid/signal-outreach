@@ -1,7 +1,7 @@
 // Outreach actions shared by the UI (server actions), crons and the Resend webhook.
 // The human gate lives here: nothing is sent except through approveAndSend(), which only
 // runs when Rohit clicks Approve.
-import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm"
+import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm"
 import { getDb, schema } from "@/db"
 import { loadEmailRules } from "@/lib/config"
 import { sendEmail } from "@/lib/email/send"
@@ -12,6 +12,11 @@ import { unsubscribeUrl } from "@/lib/unsubscribe"
 import { validateEmail } from "@/lib/validateEmail"
 
 const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[a-z]{2,}$/i
+
+// Local mirror of the deal stage (the GTM board reads this; HubSpot stays the CRM of record).
+export async function setLocalStage(startupId: number, stage: StageKey) {
+  await getDb().update(schema.startups).set({ dealStage: stage }).where(eq(schema.startups.id, startupId))
+}
 
 async function event(startupId: number, type: string, detail?: Record<string, unknown>) {
   await getDb().insert(schema.events).values({ startupId, type, detail: detail ?? null })
@@ -67,7 +72,10 @@ export async function saveDraft(draftId: number, edits: DraftEdits) {
     })
     .where(eq(schema.drafts.id, draftId))
   if (toEmail && draft.founderId) {
-    await getDb().update(schema.founders).set({ email: toEmail }).where(eq(schema.founders.id, draft.founderId))
+    await getDb()
+      .update(schema.founders)
+      .set({ email: toEmail, emailSource: "rohit" })
+      .where(and(eq(schema.founders.id, draft.founderId), or(isNull(schema.founders.email), sql`${schema.founders.email} <> ${toEmail}`)))
   }
   return v
 }
@@ -122,7 +130,8 @@ export async function approveAndSend(draftId: number, edits: DraftEdits) {
   })
 
   const sentAt = new Date()
-  await db.update(schema.drafts).set({ status: "sent", sentAt, resendId: sent.id }).where(eq(schema.drafts.id, draftId))
+  await db.update(schema.drafts).set({ status: "sent", sentAt, resendId: sent.id, deliveredTo: sent.deliveredTo }).where(eq(schema.drafts.id, draftId))
+  await setLocalStage(startup.id, "email_sent")
   await db
     .insert(schema.contacted)
     .values({ startupId: startup.id, rootDomain: domain, normalizedName: startup.normalizedName || normalizeCompanyName(startup.name), email: toEmail })
@@ -153,7 +162,7 @@ export async function skipDraft(draftId: number, reason: string) {
   if (draft.status === "sent") throw new Error("Already sent")
   await getDb().update(schema.drafts).set({ status: "skipped", skipReason: reason || "Skipped" }).where(eq(schema.drafts.id, draftId))
   await getDb().update(schema.followups).set({ status: "cancelled" }).where(eq(schema.followups.draftId, draftId))
-  await getDb().update(schema.startups).set({ stage: "closed" }).where(eq(schema.startups.id, startup.id))
+  await getDb().update(schema.startups).set({ stage: "closed", dealStage: "not_pursued" }).where(eq(schema.startups.id, startup.id))
   await event(startup.id, "skipped", { reason })
   await crm(startup.id, "not_pursued", async () => {
     await moveDeal(startup.id, "not_pursued")
@@ -175,6 +184,7 @@ export async function setDealStage(startupId: number, stage: StageKey) {
         .where(and(inArray(schema.followups.draftId, drafts.map((d) => d.id)), eq(schema.followups.status, "scheduled")))
     }
   }
+  await setLocalStage(startupId, stage)
   await event(startupId, `stage_${stage}`)
   await crm(startupId, stage, () => moveDeal(startupId, stage))
 }
@@ -192,6 +202,7 @@ export async function unsubscribe(startupId: number, reason: "unsubscribed" | "b
       .set({ status: "cancelled" })
       .where(and(eq(schema.followups.draftId, draft.id), eq(schema.followups.status, "scheduled")))
   }
+  await setLocalStage(startupId, "not_pursued")
   await event(startupId, reason)
   await crm(startupId, "not_pursued", async () => {
     await moveDeal(startupId, "not_pursued")
@@ -199,9 +210,108 @@ export async function unsubscribe(startupId: number, reason: "unsubscribed" | "b
   })
 }
 
-// Step 10 (follow-ups): sends day 3/7/14 follow-ups that are due, unless the deal reached Replied or later.
-export async function sendDueFollowups(): Promise<{ sent: number; cancelled: number; failed: number; errors: { item: string; message: string }[] }> {
+// ─── Follow-ups (step 10) ────────────────────────────────────────────────────
+// By default follow-ups are kept in Rohit's hands ("manual"): the cron only surfaces what's due,
+// and he edits / regenerates / sends each one. "auto" lets the daily cron send due follow-ups.
+
+export type FollowupsMode = "manual" | "auto"
+export async function getFollowupsMode(): Promise<FollowupsMode> {
+  const { getSetting } = await import("@/lib/config")
+  return (await getSetting<FollowupsMode>("followups_mode")) ?? "manual"
+}
+
+async function loadFollowup(followupId: number) {
+  const [row] = await getDb()
+    .select({ f: schema.followups, d: schema.drafts, s: schema.startups })
+    .from(schema.followups)
+    .innerJoin(schema.drafts, eq(schema.drafts.id, schema.followups.draftId))
+    .innerJoin(schema.startups, eq(schema.startups.id, schema.drafts.startupId))
+    .where(eq(schema.followups.id, followupId))
+  if (!row) throw new Error("Follow-up not found")
+  return row
+}
+
+// Why a follow-up must not go out (replied, suppressed, deal moved on), or null if it may.
+async function followupBlocker(d: typeof schema.drafts.$inferSelect, s: typeof schema.startups.$inferSelect): Promise<string | null> {
   const db = getDb()
+  if (d.status !== "sent") return "The first email hasn't been sent yet"
+  if (d.repliedAt) return "They replied"
+  const dncConds = [
+    s.rootDomain ? eq(schema.doNotContact.rootDomain, s.rootDomain) : undefined,
+    d.toEmail ? eq(schema.doNotContact.email, d.toEmail.toLowerCase()) : undefined,
+  ].filter(Boolean)
+  const [dnc] = dncConds.length ? await db.select({ id: schema.doNotContact.id }).from(schema.doNotContact).where(or(...dncConds)) : []
+  if (dnc) return "Recipient is on the do-not-contact list"
+  let stage: StageKey | null = (s.dealStage as StageKey | null) ?? null
+  if (hubspotEnabled()) stage = (await getDealStage(s.id).catch(() => null)) ?? stage
+  if (stage && REPLIED_OR_LATER.includes(stage)) {
+    if (stage !== s.dealStage) await setLocalStage(s.id, stage)
+    return `Deal is at "${stage.replace("_", " ")}"`
+  }
+  return null
+}
+
+const FU_RULES_WORDS = 110
+
+export async function saveFollowup(followupId: number, edits: { subject: string; body: string }) {
+  const { f } = await loadFollowup(followupId)
+  if (f.sentAt) throw new Error("Already sent")
+  await getDb()
+    .update(schema.followups)
+    .set({ subject: edits.subject.trim(), body: edits.body, editedAt: new Date(), status: "scheduled" })
+    .where(eq(schema.followups.id, followupId))
+}
+
+export async function skipFollowup(followupId: number) {
+  const { f, s } = await loadFollowup(followupId)
+  if (f.sentAt) throw new Error("Already sent")
+  await getDb().update(schema.followups).set({ status: "cancelled" }).where(eq(schema.followups.id, followupId))
+  await event(s.id, "followup_skipped", { day: f.dayOffset })
+}
+
+export async function sendFollowup(followupId: number, edits?: { subject: string; body: string }) {
+  const db = getDb()
+  const { f, d, s } = await loadFollowup(followupId)
+  if (f.sentAt) throw new Error("Already sent")
+  const blocker = await followupBlocker(d, s)
+  if (blocker) {
+    await db.update(schema.followups).set({ status: "cancelled" }).where(and(eq(schema.followups.draftId, d.id), isNull(schema.followups.sentAt)))
+    throw new Error(`${blocker}: remaining follow-ups cancelled`)
+  }
+  const subject = (edits?.subject ?? f.subject).trim()
+  const body = edits?.body ?? f.body
+  const rules = await loadEmailRules()
+  const v = validateEmail({ subject, body }, { ...rules, bodyMaxWords: FU_RULES_WORDS }, { companyName: s.name, openerFacts: [s.name] })
+  const blocking = v.checks.filter((c) => !c.pass && c.key !== "opener_specific" && c.key !== "subject_names_company")
+  if (blocking.length) throw new Error(`Fix first: ${blocking.map((c) => c.label).join(", ")}`)
+
+  const [founder] = d.founderId ? await db.select().from(schema.founders).where(eq(schema.founders.id, d.founderId)) : []
+  const sent = await sendEmail({
+    to: d.toEmail,
+    toName: founder?.name ?? null,
+    subject: subject.toLowerCase().startsWith("re:") ? subject : `Re: ${d.subject}`,
+    text: body,
+    unsubscribeUrl: unsubscribeUrl(s.id),
+    kind: "followup",
+    startupId: s.id,
+  })
+  await db
+    .update(schema.followups)
+    .set({ subject, body, status: "sent", sentAt: new Date(), resendId: sent.id, deliveredTo: sent.deliveredTo })
+    .where(eq(schema.followups.id, f.id))
+  await setLocalStage(s.id, "followup_sent")
+  await event(s.id, "followup_sent", { day: f.dayOffset, resendId: sent.id, demo: sent.demo, deliveredTo: sent.deliveredTo })
+  await crm(s.id, "followup_sent", async () => {
+    await moveDeal(s.id, "followup_sent")
+    await logOnTimeline(s.id, `<p><strong>Day ${f.dayOffset} follow-up sent via Signal</strong>${sent.demo ? " (DEMO → test inbox)" : ""}</p><pre>${escapeHtml(body)}</pre>`)
+  })
+  return sent
+}
+
+// Cron: in "auto" mode sends due follow-ups; in "manual" mode only cancels blocked ones and reports what's due.
+export async function sendDueFollowups(): Promise<{ due: number; sent: number; cancelled: number; failed: number; mode: FollowupsMode; errors: { item: string; message: string }[] }> {
+  const db = getDb()
+  const mode = await getFollowupsMode()
   const due = await db
     .select({ f: schema.followups, d: schema.drafts, s: schema.startups })
     .from(schema.followups)
@@ -209,47 +319,49 @@ export async function sendDueFollowups(): Promise<{ sent: number; cancelled: num
     .innerJoin(schema.startups, eq(schema.startups.id, schema.drafts.startupId))
     .where(and(eq(schema.followups.status, "scheduled"), lte(schema.followups.dueAt, new Date()), eq(schema.drafts.status, "sent")))
     .orderBy(asc(schema.followups.dueAt))
-  const out = { sent: 0, cancelled: 0, failed: 0, errors: [] as { item: string; message: string }[] }
+  const out = { due: due.length, sent: 0, cancelled: 0, failed: 0, mode, errors: [] as { item: string; message: string }[] }
   for (const { f, d, s } of due) {
     try {
-      let stage: StageKey | null = null
-      if (hubspotEnabled()) stage = await getDealStage(s.id).catch(() => null)
-      const dncConds = [
-        s.rootDomain ? eq(schema.doNotContact.rootDomain, s.rootDomain) : undefined,
-        d.toEmail ? eq(schema.doNotContact.email, d.toEmail.toLowerCase()) : undefined,
-      ].filter(Boolean)
-      const [dnc] = dncConds.length
-        ? await db.select({ id: schema.doNotContact.id }).from(schema.doNotContact).where(or(...dncConds))
-        : []
-      if (d.repliedAt || dnc || (stage && REPLIED_OR_LATER.includes(stage))) {
-        await db.update(schema.followups).set({ status: "cancelled" }).where(eq(schema.followups.draftId, d.id))
+      const blocker = await followupBlocker(d, s)
+      if (blocker) {
+        await db.update(schema.followups).set({ status: "cancelled" }).where(and(eq(schema.followups.draftId, d.id), isNull(schema.followups.sentAt)))
         out.cancelled++
         continue
       }
-      const [founder] = d.founderId ? await db.select().from(schema.founders).where(eq(schema.founders.id, d.founderId)) : []
-      const subject = f.subject.toLowerCase().startsWith("re:") ? f.subject : `Re: ${d.subject}`
-      const sent = await sendEmail({
-        to: d.toEmail,
-        toName: founder?.name ?? null,
-        subject,
-        text: f.body,
-        unsubscribeUrl: unsubscribeUrl(s.id),
-        kind: "followup",
-        startupId: s.id,
-      })
-      await db.update(schema.followups).set({ status: "sent", sentAt: new Date(), resendId: sent.id }).where(eq(schema.followups.id, f.id))
-      await event(s.id, "followup_sent", { day: f.dayOffset, resendId: sent.id, demo: sent.demo })
-      await crm(s.id, "followup_sent", async () => {
-        await moveDeal(s.id, "followup_sent")
-        await logOnTimeline(s.id, `<p><strong>Day ${f.dayOffset} follow-up sent via Signal</strong></p><pre>${escapeHtml(f.body)}</pre>`)
-      })
-      out.sent++
+      if (mode === "auto") {
+        await sendFollowup(f.id)
+        out.sent++
+      }
     } catch (err) {
       out.failed++
       out.errors.push({ item: `${s.name} day ${f.dayOffset}`, message: (err as Error).message })
     }
   }
   return out
+}
+
+// Pulls deal stages from HubSpot for contacted startups (Rohit may move deals there).
+export async function refreshStagesFromHubSpot(): Promise<number> {
+  if (!hubspotEnabled()) return 0
+  const db = getDb()
+  const rows = await db
+    .select({ id: schema.startups.id, stage: schema.startups.dealStage })
+    .from(schema.startups)
+    .innerJoin(schema.drafts, eq(schema.drafts.startupId, schema.startups.id))
+    .where(and(eq(schema.drafts.status, "sent")))
+  let changed = 0
+  for (const r of rows) {
+    const stage = await getDealStage(r.id).catch(() => null)
+    if (stage && stage !== r.stage) {
+      await setLocalStage(r.id, stage)
+      if (REPLIED_OR_LATER.includes(stage)) {
+        const [d] = await db.select({ id: schema.drafts.id }).from(schema.drafts).where(eq(schema.drafts.startupId, r.id))
+        if (d) await db.update(schema.followups).set({ status: "cancelled" }).where(and(eq(schema.followups.draftId, d.id), isNull(schema.followups.sentAt)))
+      }
+      changed++
+    }
+  }
+  return changed
 }
 
 // Step 7: drafted startups not yet in HubSpot → Company + Contact + Deal at "Draft ready".
@@ -274,4 +386,53 @@ export async function syncPendingToHubSpot(limit = 20): Promise<{ synced: number
     }
   }
   return out
+}
+
+// "Generate": Gemini writes a fresh follow-up using everything sent so far (+ an optional angle),
+// validated in code with up to 2 rewrites. Saved as an edit; nothing is sent.
+export async function generateFollowup(followupId: number, angle?: string) {
+  const db = getDb()
+  const { f, d, s } = await loadFollowup(followupId)
+  if (f.sentAt) throw new Error("Already sent")
+  const { getSetting } = await import("@/lib/config")
+  const { generateJson } = await import("@/lib/gemini")
+  const { buildFollowupPrompt, followupResponseSchema, followupSystem, followupZod } = await import("@/lib/prompts/followup")
+  const { renderFooter, withFooter } = await import("@/lib/validateEmail")
+  const rules = await loadEmailRules()
+  const accelerator = await getSetting<{ name: string }>("accelerator_profile")
+  const all = await db.select().from(schema.followups).where(eq(schema.followups.draftId, d.id)).orderBy(asc(schema.followups.dayOffset))
+  const [founder] = d.founderId ? await db.select().from(schema.founders).where(eq(schema.founders.id, d.founderId)) : []
+  const facts = s.facts as Facts
+  const research = s.research as { founder_posts?: { text: string }[] } | null
+  const footer = renderFooter(rules.footer, { accelerator_name: accelerator?.name ?? "", unsubscribe_url: unsubscribeUrl(s.id) })
+  const system = followupSystem(rules, FU_RULES_WORDS)
+  const prompt = buildFollowupPrompt({
+    day: f.dayOffset,
+    isLast: f.dayOffset === Math.max(...all.map((x) => x.dayOffset)),
+    original: { subject: d.subject, body: d.body },
+    previous: all.filter((x) => x.sentAt).map((x) => ({ day: x.dayOffset, body: x.body })),
+    facts: { company: facts.company_name, round: facts.round_stage_raw ?? facts.round_stage, investors: facts.investors, sector: facts.sector, what_they_do: facts.what_they_do, use_of_funds: facts.use_of_funds },
+    founderName: founder?.name ?? null,
+    accelerator,
+    angle: angle?.trim() || undefined,
+    newInfo: (research?.founder_posts ?? []).slice(0, 3).map((p) => p.text.slice(0, 280)),
+  })
+  let out = await generateJson({ system, prompt, responseSchema: followupResponseSchema, zod: followupZod, temperature: 0.7 })
+  const check = (o: typeof out) => {
+    const v = validateEmail({ subject: o.subject, body: withFooter(o.body, footer) }, { ...rules, bodyMaxWords: FU_RULES_WORDS }, { companyName: s.name, openerFacts: [s.name] })
+    return v.checks.filter((c) => !c.pass && c.key !== "opener_specific" && c.key !== "subject_names_company")
+  }
+  for (let i = 0; i < 2 && check(out).length; i++) {
+    const failures = check(out).map((c) => `${c.label}${c.detail ? ` (${c.detail})` : ""}`)
+    out = await generateJson({ system, prompt: `${prompt}
+
+YOUR PREVIOUS ATTEMPT FAILED THESE CHECKS, fix them:
+${failures.join("\n")}
+
+${out.body}`, responseSchema: followupResponseSchema, zod: followupZod, temperature: 0.3 })
+  }
+  const body = withFooter(out.body, footer)
+  await db.update(schema.followups).set({ subject: out.subject.trim(), body, editedAt: new Date(), status: "scheduled" }).where(eq(schema.followups.id, followupId))
+  await event(s.id, "followup_generated", { day: f.dayOffset, angle: out.angle })
+  return { subject: out.subject.trim(), body, angle: out.angle }
 }

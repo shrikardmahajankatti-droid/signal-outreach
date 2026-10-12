@@ -19,6 +19,7 @@ import { FLAG_LABELS, OPENER_LABELS, formatUsd } from "@/lib/labels"
 import type { DraftDetail } from "@/lib/outreach-queries"
 import { cn } from "@/lib/utils"
 import { validateEmail } from "@/lib/validateEmail"
+import { RecipientField } from "./recipient"
 
 type Notice = { kind: "ok" | "error"; text: string } | null
 
@@ -118,21 +119,15 @@ export function DraftEditor({ detail, demoMode, testInbox, from }: { detail: Dra
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {/* Left: editor */}
         <div className="space-y-4 rounded-lg border border-line bg-surface p-4 shadow-subtle">
-          <div className="space-y-1.5">
-            <Label htmlFor="to" className="text-[12px] text-text-secondary">To</Label>
-            <div className="flex items-center gap-2">
-              <span className="shrink-0 rounded-md bg-muted px-2 py-1.5 text-[13px]">{founder?.name ?? "Founder"}</span>
-              <Input
-                id="to"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                placeholder="email needed: type the founder's address"
-                disabled={locked}
-                className="h-9 text-[13px]"
-              />
-            </div>
-            {demoMode && <p className="text-[12px] text-status-maybe">DEMO MODE: sends go to {testInbox ?? "the test inbox"} with a banner naming this recipient.</p>}
-          </div>
+          <RecipientField
+            detail={detail}
+            value={to}
+            onChange={setTo}
+            locked={locked}
+            demoMode={demoMode}
+            testInbox={testInbox}
+            onRefresh={() => router.refresh()}
+          />
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
@@ -213,7 +208,7 @@ export function DraftEditor({ detail, demoMode, testInbox, from }: { detail: Dra
               <p><span className="inline-block w-14">From</span>{from}</p>
               <p>
                 <span className="inline-block w-14">To</span>
-                {demoMode ? `${testInbox ?? "test inbox"} (demo)` : to || "—"}
+                {demoMode ? `${testInbox ?? "test inbox"} (demo · intended ${to || "email needed"})` : to || "—"}
               </p>
               <p className="text-[13px] font-medium text-foreground"><span className="inline-block w-14 font-normal text-text-secondary">Subject</span>{subject}</p>
             </div>

@@ -78,3 +78,18 @@ export async function rewriteOpenerAction(body: string, post: string): Promise<A
 export async function setStageAction(startupId: number, stage: StageKey) {
   return run(() => setDealStage(startupId, stage), "Stage updated")
 }
+
+export async function findEmailsAction(draftId: number) {
+  return run(async () => {
+    const [d] = await getDb().select({ startupId: schema.drafts.startupId }).from(schema.drafts).where(eq(schema.drafts.id, draftId))
+    if (!d) throw new Error("Draft not found")
+    const { discoverEmails } = await import("@/lib/research/discover")
+    const found = await discoverEmails(d.startupId)
+    return found.length
+  }, "Checked the website and search results for publicly listed addresses")
+}
+
+export async function checkMailDomainAction(email: string): Promise<ActionResult<{ accepts: boolean | null }>> {
+  const { domainAcceptsMail } = await import("@/lib/research/email-finder")
+  return { ok: true, data: { accepts: await domainAcceptsMail(email.trim() || null) } }
+}

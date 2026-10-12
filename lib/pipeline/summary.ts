@@ -38,8 +38,13 @@ export async function runSummary(): Promise<StageResult> {
   ])
 
   const rows = pending.map((p) => ({ ...p, daysLeft: daysLeftInWindow(p.announcedOn, p.createdAt, cfg.late_catch_days) }))
+  const [{ due }] = await db
+    .select({ due: sql<number>`count(*)::int` })
+    .from(schema.followups)
+    .innerJoin(schema.drafts, eq(schema.drafts.id, schema.followups.draftId))
+    .where(and(eq(schema.followups.status, "scheduled"), eq(schema.drafts.status, "sent"), sql`${schema.followups.dueAt} <= now()`))
   const closing = rows.filter((r) => r.daysLeft !== null && r.daysLeft <= 7).length
-  const headline = `${rows.length} draft${rows.length === 1 ? "" : "s"} ready · ${closing} closing their ${cfg.late_catch_days}-day window`
+  const headline = `${rows.length} draft${rows.length === 1 ? "" : "s"} ready · ${closing} closing their ${cfg.late_catch_days}-day window${due ? ` · ${due} follow-up${due === 1 ? "" : "s"} due` : ""}`
   const appUrl = (process.env.APP_URL || "").replace(/\/$/, "")
 
   const list = rows
@@ -54,6 +59,7 @@ export async function runSummary(): Promise<StageResult> {
 <h1 style="font-size:20px;margin:0 0 12px">${escapeHtml(headline)}</h1>
 <p style="font-size:14px;color:#6B6F76;margin:0 0 16px">Last 24h: ${articles} articles read, ${rejected} rejected by the rules. Nothing is sent until you approve it.</p>
 ${rows.length ? `<table style="width:100%;border-collapse:collapse;font-size:14px">${list}</table>` : ""}
+${due ? `<p style="font-size:14px;margin:12px 0 0">${due} follow-up${due === 1 ? " is" : "s are"} due: <a href="${appUrl}/pipeline" style="color:#2F6FEB">review the follow-up queue</a>.</p>` : ""}
 <p style="margin:20px 0"><a href="${appUrl}/outreach" style="background:#1A1A1A;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-size:14px">Review drafts</a></p>
 </div>`
   const text = `${headline}\n\nLast 24h: ${articles} articles read, ${rejected} rejected.\n\n${rows

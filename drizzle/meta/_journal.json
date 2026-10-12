@@ -22,6 +22,13 @@
       "when": 1791796707227,
       "tag": "0002_founder_hubspot",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791799267756,
+      "tag": "0003_gtm_tracking",
+      "breakpoints": true
     }
   ]
 }

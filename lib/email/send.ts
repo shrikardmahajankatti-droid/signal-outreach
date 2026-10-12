@@ -22,6 +22,19 @@ export type OutgoingEmail = {
   html?: string
 }
 
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+
+// A plain-looking HTML twin of the text body. Opens can only be tracked in HTML (pixel), and
+// clicks only on HTML links, so every email carries both parts.
+export function textToHtml(text: string): string {
+  const linked = esc(text).replace(/https?:\/\/[^\s<]+/g, (url) => `<a href="${url}" style="color:#2F6FEB">${url}</a>`)
+  const paragraphs = linked
+    .split(/\n{2,}/)
+    .map((p) => `<p style="margin:0 0 14px">${p.replace(/\n/g, "<br>")}</p>`)
+    .join("")
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1A1A1A;max-width:600px">${paragraphs}</div>`
+}
+
 export type SendResult = { id: string; deliveredTo: string; demo: boolean }
 
 export async function sendEmail(email: OutgoingEmail): Promise<SendResult> {
@@ -55,7 +68,7 @@ export async function sendEmail(email: OutgoingEmail): Promise<SendResult> {
     replyTo: process.env.ROHIT_EMAIL || undefined,
     subject: email.subject,
     text,
-    ...(email.html ? { html: email.html } : {}),
+    html: email.html ?? textToHtml(text),
     headers,
     tags: [
       { name: "kind", value: email.kind },

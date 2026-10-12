@@ -5,9 +5,10 @@ import { verifyResendSignature } from "@/lib/email/webhook"
 import { hubspotEnabled, moveDeal } from "@/lib/hubspot"
 import { unsubscribe } from "@/lib/outreach"
 
-type ResendEvent = { type: string; created_at: string; data: { email_id: string; to?: string[] } }
+type ResendEvent = { type: string; created_at: string; data: { email_id: string; to?: string[]; click?: { link?: string } } }
 
-// delivered → contacted + HubSpot "Email sent"; bounced / complained → do_not_contact; opened → timeline.
+// delivered → contacted + HubSpot "Email sent"; bounced / complained → do_not_contact;
+// opened / clicked → tracked on the draft or follow-up and the startup timeline.
 export async function POST(req: Request) {
   const body = await req.text()
   const secret = process.env.RESEND_WEBHOOK_SECRET
@@ -40,13 +41,34 @@ export async function POST(req: Request) {
       break
     }
     case "email.opened":
-      if (draft && !draft.openedAt) await db.update(schema.drafts).set({ openedAt: new Date(evt.created_at) }).where(eq(schema.drafts.id, draft.id))
+    case "email.clicked": {
+      const at = new Date(evt.created_at)
+      const field = evt.type === "email.opened" ? "openedAt" : "clickedAt"
+      if (draft && !draft[field]) await db.update(schema.drafts).set({ [field]: at }).where(eq(schema.drafts.id, draft.id))
+      if (followup && !followup[field]) await db.update(schema.followups).set({ [field]: at }).where(eq(schema.followups.id, followup.id))
+      // A click also implies an open (images may be blocked).
+      if (evt.type === "email.clicked") {
+        if (draft && !draft.openedAt) await db.update(schema.drafts).set({ openedAt: at }).where(eq(schema.drafts.id, draft.id))
+        if (followup && !followup.openedAt) await db.update(schema.followups).set({ openedAt: at }).where(eq(schema.followups.id, followup.id))
+      }
       break
+    }
     case "email.bounced":
     case "email.complained":
       await unsubscribe(startupId, evt.type === "email.bounced" ? "bounced" : "complained", d.toEmail)
       break
   }
-  await db.insert(schema.events).values({ startupId, type: evt.type.replace("email.", "email_"), detail: { emailId, followup: Boolean(followup) } })
+  // One timeline row per email per event type (opens can fire many times).
+  const type = evt.type.replace("email.", "email_")
+  const seen = (draft ?? followup) && (evt.type === "email.opened" || evt.type === "email.clicked")
+    ? (evt.type === "email.opened" ? (draft?.openedAt ?? followup?.openedAt) : (draft?.clickedAt ?? followup?.clickedAt))
+    : null
+  if (!seen) {
+    await db.insert(schema.events).values({
+      startupId,
+      type,
+      detail: { emailId, followup: followup ? followup.dayOffset : null, link: evt.data.click?.link ?? null, to: evt.data.to ?? null },
+    })
+  }
   return NextResponse.json({ ok: true })
 }

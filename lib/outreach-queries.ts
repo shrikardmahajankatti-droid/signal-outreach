@@ -4,6 +4,7 @@ import { getSetting, loadEmailRules, loadQualificationConfig } from "@/lib/confi
 import { hubspotDealUrl, type HubSpotAccount } from "@/lib/hubspot"
 import type { Facts } from "@/lib/qualification/facts"
 import { daysLeftInWindow } from "@/lib/window"
+import { domainAcceptsMail, type EmailCandidate } from "@/lib/research/email-finder"
 
 export const OUTREACH_TABS = {
   drafts: "pending",
@@ -25,6 +26,11 @@ export type OutreachRow = {
   openerSource: string | null
   checksPass: boolean
   hasEmail: boolean
+  toName: string | null
+  toEmail: string | null
+  deliveredTo: string | null
+  openedAt: string | null
+  clickedAt: string | null
   updatedAt: string
   flags: string[]
 }
@@ -34,9 +40,10 @@ export async function listOutreach(tab: OutreachTab): Promise<{ rows: OutreachRo
   const cfg = await loadQualificationConfig()
   const [rows, countRows] = await Promise.all([
     db
-      .select({ d: schema.drafts, s: schema.startups })
+      .select({ d: schema.drafts, s: schema.startups, founderName: schema.founders.name })
       .from(schema.drafts)
       .innerJoin(schema.startups, eq(schema.startups.id, schema.drafts.startupId))
+      .leftJoin(schema.founders, eq(schema.founders.id, schema.drafts.founderId))
       .where(eq(schema.drafts.status, OUTREACH_TABS[tab]))
       .orderBy(desc(schema.startups.fitScore), desc(schema.drafts.updatedAt)),
     db.select({ status: schema.drafts.status, n: sql<number>`count(*)::int` }).from(schema.drafts).groupBy(schema.drafts.status),
@@ -46,7 +53,7 @@ export async function listOutreach(tab: OutreachTab): Promise<{ rows: OutreachRo
   ) as Record<OutreachTab, number>
   return {
     counts,
-    rows: rows.map(({ d, s }) => {
+    rows: rows.map(({ d, s, founderName }) => {
       const f = s.facts as Facts
       return {
         draftId: d.id,
@@ -60,6 +67,11 @@ export async function listOutreach(tab: OutreachTab): Promise<{ rows: OutreachRo
         openerSource: d.openerSource,
         checksPass: Boolean((d.checks as { pass?: boolean } | null)?.pass),
         hasEmail: Boolean(d.toEmail),
+        toName: founderName,
+        toEmail: d.toEmail,
+        deliveredTo: d.deliveredTo,
+        openedAt: d.openedAt?.toISOString() ?? null,
+        clickedAt: d.clickedAt?.toISOString() ?? null,
         updatedAt: d.updatedAt.toISOString(),
         flags: s.flags,
       }
@@ -100,7 +112,10 @@ export async function getDraftDetail(draftId: number) {
       sentAt: d.sentAt?.toISOString() ?? null,
       deliveredAt: d.deliveredAt?.toISOString() ?? null,
       openedAt: d.openedAt?.toISOString() ?? null,
+      clickedAt: d.clickedAt?.toISOString() ?? null,
       repliedAt: d.repliedAt?.toISOString() ?? null,
+      deliveredTo: d.deliveredTo,
+      toEmailAcceptsMail: await domainAcceptsMail(d.toEmail),
     },
     startup: {
       id: s.id,
@@ -115,8 +130,23 @@ export async function getDraftDetail(draftId: number) {
       daysLeft: daysLeftInWindow(s.announcedOn, s.createdAt, cfg.late_catch_days),
       hubspotUrl: hubspotDealUrl(s.hubspotDealId, account),
     },
-    founder: founder ? { name: founder.name, title: founder.title, linkedinUrl: founder.linkedinUrl, confidence: founder.linkedinMatchConfidence } : null,
-    followups: followups.map((f) => ({ id: f.id, day: f.dayOffset, subject: f.subject, body: f.body, status: f.status, dueAt: f.dueAt?.toISOString() ?? null, sentAt: f.sentAt?.toISOString() ?? null })),
+    founder: founder
+      ? { name: founder.name, title: founder.title, linkedinUrl: founder.linkedinUrl, confidence: founder.linkedinMatchConfidence, email: founder.email, emailSource: founder.emailSource }
+      : null,
+    otherFounders: founders.filter((f) => f.id !== founder?.id).map((f) => ({ name: f.name, email: f.email, emailSource: f.emailSource })),
+    emailCandidates: ((s.research as { emails?: EmailCandidate[] } | null)?.emails ?? []) as EmailCandidate[],
+    emailsCheckedAt: (s.research as { emails_checked_at?: string } | null)?.emails_checked_at ?? null,
+    followups: followups.map((f) => ({
+      id: f.id,
+      day: f.dayOffset,
+      subject: f.subject,
+      body: f.body,
+      status: f.status,
+      dueAt: f.dueAt?.toISOString() ?? null,
+      sentAt: f.sentAt?.toISOString() ?? null,
+      openedAt: f.openedAt?.toISOString() ?? null,
+      deliveredTo: f.deliveredTo,
+    })),
     rules: { subjectMaxChars: rules.subjectMaxChars, bodyMaxWords: rules.bodyMaxWords, bannedPhrases: rules.bannedPhrases, spamWords: rules.spamWords, footer: rules.footer },
     openerFacts: [
       ...facts.founders.map((f) => f.name.split(" ")[0]),

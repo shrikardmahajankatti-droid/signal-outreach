@@ -7,6 +7,7 @@ import { readWithJina } from "@/lib/http"
 import { findEmployeeBand, matchFounderLinkedIn, pickCompanyDomain } from "@/lib/research/match"
 import { tavilySearch, type TavilyResult } from "@/lib/research/tavily"
 import type { Facts } from "@/lib/qualification/facts"
+import { discoverEmails } from "@/lib/research/discover"
 import type { StageResult } from "./runs"
 
 const BATCH = 30
@@ -15,6 +16,8 @@ const TIME_BUDGET_MS = 200_000
 
 export type Research = {
   website: { url: string; excerpt: string } | null
+  emails?: import("@/lib/research/email-finder").EmailCandidate[]
+  emails_checked_at?: string
   domain_source: "article" | "search" | null
   founder_posts: { text: string; url: string; source: string }[]
   employee_band: { min: number; max: number; source: string } | null
@@ -147,6 +150,14 @@ async function enrichOne(s: typeof schema.startups.$inferSelect, cfg: Awaited<Re
       lastError: null,
     })
     .where(eq(schema.startups.id, s.id))
+  // 5. Publicly listed founder emails (website contact/about/team pages + one search).
+  if (!rejectCode && domain) {
+    try {
+      await discoverEmails(s.id)
+    } catch {
+      // best-effort
+    }
+  }
   await db.insert(schema.events).values({
     startupId: s.id,
     type: rejectCode ? "rejected" : "researched",

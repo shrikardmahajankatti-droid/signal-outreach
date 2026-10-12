@@ -78,6 +78,7 @@ export function OutreachTable({ rows, tab }: { rows: OutreachRow[]; tab: Outreac
                 </th>
               )}
               <th className="px-4 py-2.5 font-medium">Company</th>
+              <th className="px-4 py-2.5 font-medium">To</th>
               <th className="px-4 py-2.5 font-medium">Round</th>
               <th className="px-4 py-2.5 font-medium">Fit score</th>
               <th className="px-4 py-2.5 font-medium whitespace-nowrap">Days left</th>
@@ -103,7 +104,6 @@ export function OutreachTable({ rows, tab }: { rows: OutreachRow[]; tab: Outreac
                     {r.company}
                   </Link>
                   <div className="mt-0.5 flex gap-1.5 text-[11px] text-text-secondary">
-                    {!r.hasEmail && r.status === "pending" && <span>email needed</span>}
                     {!r.checksPass && r.status === "pending" && (
                       <span className="inline-flex items-center gap-0.5 text-status-maybe">
                         <AlertTriangle className="size-3" />
@@ -111,6 +111,20 @@ export function OutreachTable({ rows, tab }: { rows: OutreachRow[]; tab: Outreac
                       </span>
                     )}
                   </div>
+                </td>
+                <td className="max-w-[240px] px-4 py-3">
+                  <p className="truncate">{r.toName ?? "Founder"}</p>
+                  {r.toEmail ? (
+                    <p className="truncate text-[12px] text-text-secondary">{r.toEmail}</p>
+                  ) : (
+                    <p className="text-[12px] text-status-maybe">email needed</p>
+                  )}
+                  {r.deliveredTo && r.deliveredTo !== r.toEmail && (
+                    <p className="truncate text-[11px] text-text-secondary">delivered to {r.deliveredTo}</p>
+                  )}
+                  {(r.openedAt || r.clickedAt) && (
+                    <p className="text-[11px] text-status-sent">{[r.openedAt && "opened", r.clickedAt && "clicked"].filter(Boolean).join(" · ")}</p>
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <span className="capitalize">{r.round}</span>

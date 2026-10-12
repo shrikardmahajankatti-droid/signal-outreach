@@ -48,8 +48,15 @@ export function computeFitScore(
   return { score: Math.max(0, Math.min(100, Math.round(score))), adjustments }
 }
 
-function pickFounder(facts: Facts) {
-  return facts.founders.find((f) => /ceo/i.test(f.title ?? "")) ?? facts.founders.find((f) => /founder/i.test(f.title ?? "")) ?? facts.founders[0] ?? null
+function pickFounder(facts: Facts, withEmail: string[] = []) {
+  // A founder with a publicly listed email beats a title match: the email can actually reach them.
+  return (
+    facts.founders.find((f) => withEmail.includes(f.name)) ??
+    facts.founders.find((f) => /ceo/i.test(f.title ?? "")) ??
+    facts.founders.find((f) => /founder/i.test(f.title ?? "")) ??
+    facts.founders[0] ??
+    null
+  )
 }
 
 function openerCandidates(facts: Facts, research: Research | null, knownInvestors: string[]): OpenerCandidate[] {
@@ -76,7 +83,8 @@ async function draftEmail(
   knownInvestors: string[]
 ) {
   const db = getDb()
-  const founder = pickFounder(facts)
+  const founderRows = await db.select({ name: schema.founders.name, email: schema.founders.email }).from(schema.founders).where(eq(schema.founders.startupId, s.id))
+  const founder = pickFounder(facts, founderRows.filter((f) => f.email).map((f) => f.name))
   const openers = openerCandidates(facts, research, knownInvestors)
   const footer = renderFooter(rules.footer, { accelerator_name: accelerator.name, unsubscribe_url: unsubscribeUrl(s.id) })
   const openerFacts = [
@@ -244,7 +252,7 @@ async function scoreOne(
 
   if (decision === "accepted") {
     const { drafted, pass } = await draftEmail(s, facts, research, reasons, env.rules, env.accelerator, env.knownInvestors)
-    await db.update(schema.startups).set({ stage: "drafted" }).where(eq(schema.startups.id, s.id))
+    await db.update(schema.startups).set({ stage: "drafted", dealStage: "draft_ready" }).where(eq(schema.startups.id, s.id))
     if (drafted) await db.insert(schema.events).values({ startupId: s.id, type: "drafted", detail: { checks_pass: pass } })
   }
   return decision

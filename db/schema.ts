@@ -101,6 +101,8 @@ export const startups = pgTable(
     announcedOn: date("announced_on"),
     hubspotCompanyId: text("hubspot_company_id"),
     hubspotDealId: text("hubspot_deal_id"),
+    // Local mirror of the HubSpot deal stage (draft_ready … not_pursued) for the GTM board.
+    dealStage: text("deal_stage"),
     isDemo: boolean("is_demo").notNull().default(false),
     lastError: text("last_error"),
     ...timestamps,
@@ -139,6 +141,8 @@ export const founders = pgTable(
     name: text("name").notNull(),
     title: text("title"),
     email: text("email"),
+    // Where the email came from: "rohit" (typed in), or the public page/search result it was found on.
+    emailSource: text("email_source"),
     linkedinUrl: text("linkedin_url"),
     linkedinMatchConfidence: real("linkedin_match_confidence"),
     linkedinVerified: boolean("linkedin_verified").notNull().default(false),
@@ -176,8 +180,11 @@ export const drafts = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
     openedAt: timestamp("opened_at", { withTimezone: true }),
+    clickedAt: timestamp("clicked_at", { withTimezone: true }),
     repliedAt: timestamp("replied_at", { withTimezone: true }),
     resendId: text("resend_id"),
+    // The address Resend actually delivered to (TEST_INBOX in demo mode) vs to_email (the founder).
+    deliveredTo: text("delivered_to"),
     ...timestamps,
   },
   (t) => [index("drafts_status_idx").on(t.status), index("drafts_resend_idx").on(t.resendId)]
@@ -197,7 +204,12 @@ export const followups = pgTable(
     status: text("status").notNull().default("scheduled"),
     dueAt: timestamp("due_at", { withTimezone: true }),
     sentAt: timestamp("sent_at", { withTimezone: true }),
+    openedAt: timestamp("opened_at", { withTimezone: true }),
+    clickedAt: timestamp("clicked_at", { withTimezone: true }),
     resendId: text("resend_id"),
+    deliveredTo: text("delivered_to"),
+    // Set when Rohit edits or regenerates it; the cron never overwrites edited follow-ups.
+    editedAt: timestamp("edited_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [

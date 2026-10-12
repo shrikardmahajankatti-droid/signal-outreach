@@ -115,3 +115,19 @@ describe("research matching", () => {
     expect(findEmployeeBand([r("Acme | LinkedIn", "https://linkedin.com/company/acme", "Software · 11-50 employees · Bengaluru")])).toMatchObject({ min: 11, max: 50 })
   })
 })
+
+describe("email finder (public addresses only)", async () => {
+  const { classifyEmail, extractEmails } = await import("@/lib/research/email-finder")
+  const founders = ["Uttam Tiwari", "Omkar Raikar"]
+  it("matches a founder only when their name is in the address", () => {
+    expect(classifyEmail("uttam@desible.ai", "desible.ai", founders)).toMatchObject({ kind: "founder", founder: "Uttam Tiwari" })
+    expect(classifyEmail("omkar.raikar@desible.ai", "desible.ai", founders)).toMatchObject({ kind: "founder", founder: "Omkar Raikar" })
+    expect(classifyEmail("hello@desible.ai", "desible.ai", founders)).toMatchObject({ kind: "generic" })
+    expect(classifyEmail("priya@desible.ai", "desible.ai", founders)).toMatchObject({ kind: "person" })
+  })
+  it("ignores other domains, no-reply and image filenames", () => {
+    expect(classifyEmail("uttam@gmail.com", "desible.ai", founders)).toBeNull()
+    expect(classifyEmail("noreply@desible.ai", "desible.ai", founders)).toBeNull()
+    expect(extractEmails("logo@2x.png write to hello@desible.ai.", "https://desible.ai", "desible.ai", founders).map((e) => e.email)).toEqual(["hello@desible.ai"])
+  })
+})
