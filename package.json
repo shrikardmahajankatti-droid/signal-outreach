@@ -15,7 +15,8 @@
     "stage": "tsx --tsconfig tsconfig.json scripts/run-stage.ts",
     "seed:demo": "tsx --tsconfig tsconfig.json scripts/seed-demo.ts",
     "test": "vitest run",
-    "test:db": "RUN_DB_TESTS=1 vitest run"
+    "test:db": "RUN_DB_TESTS=1 vitest run",
+    "redraft": "tsx --tsconfig tsconfig.json scripts/redraft.ts"
   },
   "dependencies": {
     "@google/genai": "^2.28.0",

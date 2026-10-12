@@ -108,8 +108,10 @@ export async function getPipelineOverview(): Promise<StageOverview[]> {
         subtitle: [g.decision, ...g.codes].join(" · ") + (g.flags.length ? ` · flags: ${g.flags.join(", ")}` : ""),
       })),
     },
-    empty("enrich"),
-    empty("score-draft"),
+    await stageFromEvents("enrich", "researched", today, (d) =>
+      [d.domain ? `domain ${d.domain}` : "no domain", `${d.founders ?? 0} founders`, `${d.posts ?? 0} posts`].join(" · ")
+    ),
+    await scoreDraftOverview(today),
     empty("sync"),
     empty("summary"),
     empty("gate"),
@@ -132,4 +134,54 @@ export async function getRecentArticles(limit = 50) {
     .from(schema.articles)
     .orderBy(desc(schema.articles.publishedAt))
     .limit(limit)
+}
+
+async function stageFromEvents(
+  key: StageKey,
+  type: string,
+  since: Date,
+  describe: (detail: Record<string, unknown>) => string
+): Promise<StageOverview> {
+  const db = getDb()
+  const [rows, run] = await Promise.all([
+    db
+      .select({ name: schema.startups.name, detail: schema.events.detail, createdAt: schema.events.createdAt })
+      .from(schema.events)
+      .innerJoin(schema.startups, eq(schema.startups.id, schema.events.startupId))
+      .where(eq(schema.events.type, type))
+      .orderBy(desc(schema.events.createdAt))
+      .limit(30),
+    lastRun(key),
+  ])
+  return {
+    key,
+    count: rows.filter((r) => r.createdAt >= since).length,
+    lastRun: run,
+    items: rows.map((r) => ({ title: r.name, subtitle: describe((r.detail ?? {}) as Record<string, unknown>) })),
+  }
+}
+
+async function scoreDraftOverview(since: Date): Promise<StageOverview> {
+  const db = getDb()
+  const [rows, run, [{ n }]] = await Promise.all([
+    db
+      .select({
+        name: schema.startups.name,
+        score: schema.qualificationLog.fitScore,
+        decision: schema.qualificationLog.decision,
+      })
+      .from(schema.qualificationLog)
+      .innerJoin(schema.startups, eq(schema.startups.id, schema.qualificationLog.startupId))
+      .where(eq(schema.qualificationLog.phase, "fit"))
+      .orderBy(desc(schema.qualificationLog.createdAt))
+      .limit(30),
+    lastRun("score-draft"),
+    db.select({ n: sql<number>`count(*)::int` }).from(schema.drafts).where(gte(schema.drafts.createdAt, since)),
+  ])
+  return {
+    key: "score-draft",
+    count: n,
+    lastRun: run,
+    items: rows.map((r) => ({ title: r.name, subtitle: `fit ${r.score ?? "—"} · ${r.decision}` })),
+  }
 }

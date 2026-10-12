@@ -2,7 +2,7 @@
 
 Every morning Signal finds startups that announced a **pre-seed / seed** round in the last 24–48 hours, rejects the ones that don't fit, researches the ones that do, and drafts a personal outreach email for each. Rohit approves every email before it is sent.
 
-> Status: **Phase 4, extract + qualify.** Gemini Flash extracts facts with evidence from live and demo articles, and the code gates G1–G5 reject or skip with reason codes. Research, scoring and drafting come next.
+> Status: **Phase 5, research + score + draft.** Qualified startups are researched (Jina + Tavily), scored against the live thesis, and accepted ones get a validated email plus day 3/7/14 follow-ups. The outreach UI and human gate come next.
 
 ## Stack
 
@@ -26,6 +26,7 @@ Demo and tests:
 npm run seed:demo      # load data/demo_startups.json as is_demo articles and run the real pipeline (steps 3+)
 npm test               # unit tests: every hard-gate rule, qualification.md §10 cases, Zomint merge
 npm run test:db        # also checks the decisions the real pipeline wrote to Neon
+npm run redraft -- all # regenerate every pending draft (e.g. after changing the draft prompt)
 ```
 
 `npm run setup` is idempotent and never overwrites edits made in the UI. Use `npm run setup -- --force` to reload config, thesis and email rules from the files.
@@ -77,6 +78,12 @@ Secrets live only in `.env.local` (git-ignored) and Vercel environment variables
 | Qualify stage + `qualification_log` | `lib/pipeline/qualify.ts` |
 | Demo data → articles, demo reset | `lib/demo.ts`, `lib/pipeline/demo-reset.ts`, `scripts/seed-demo.ts` |
 | Tests | `tests/qualification.test.ts` |
+| Research (Jina + Tavily), LinkedIn matching | `lib/pipeline/enrich.ts`, `lib/research/*` |
+| Fit scoring prompt | `lib/prompts/score.ts` |
+| Draft + rewrite prompts | `lib/prompts/draft.ts` |
+| Score → draft → validate → rewrite (≤2) | `lib/pipeline/score-draft.ts` |
+| Email rule checks (code) | `lib/validateEmail.ts` |
+| Signed unsubscribe links | `lib/unsubscribe.ts` |
 | "Run pipeline now" | `components/shell/run-pipeline-button.tsx` → `app/api/pipeline/run` |
 
 ## Decisions and notes
@@ -102,3 +109,10 @@ Secrets live only in `.env.local` (git-ignored) and Vercel environment variables
 - **"Name + (domain or founder)".** If neither a domain nor a founder is known after extraction, the startup is flagged `identity_to_enrich`, and `REJ_UNIDENTIFIABLE` is applied only if research can't find one. Generic names such as "a stealth startup" are rejected immediately.
 - **Demo clock.** Demo-only startups are gated against a fixed date: the day after the latest demo announcement, stored as `app_settings.demo_reference_date`. This keeps their recency decisions stable whenever the demo is replayed. All demo companies are also in live news (the Inc42 roundup was ingested from RSS), so most become live leads and use the real clock.
 - **Time budget.** The extract stage stops starting new Gemini batches after 200 s. Leftover articles stay `new` and are picked up by the next run.
+- **Research budget.** Each startup uses at most 3 Tavily credits: a domain search (only when the domain is unknown), a LinkedIn search that returns founder profiles and the company-size band, and a posts/interviews search. It also uses one Jina read of the homepage. Research results are stored in `startups.research`, so matching can be re-run without new searches (`scripts/rematch-linkedin.ts`).
+- **LinkedIn confidence** is computed in code (`lib/research/match.ts`) and is never set by the model. A profile must carry the founder's name: a full name match adds 0.5, the company name adds 0.35, and a founder/CEO title adds 0.15. "Verify on LinkedIn" in the UI lets Rohit confirm a match.
+- **Fit score.** Gemini scores each of the 5 thesis factors from 0 to 100. The weighted total is computed in code from the live `thesis.weights`, followed by the §4b adjustments (`penalty_*`, `bonus_serial_founder`). Changing a weight therefore changes the next run's scores with no deploy. Thresholds come from the `thesis` row (≥ 70 drafts, 50–69 maybe, < 50 `REJ_LOW_FIT`). The last 10 👍/👎 feedback rows are passed in as calibration examples.
+- **Maybe list.** Startups scored 50–69 are kept as `maybe` without a draft, to save tokens. Rohit can draft one from the Leads page.
+- **Drafts and the validator.** Gemini writes the body without a sign-off, and the code appends the standard footer, which includes a signed unsubscribe link. The footer doesn't count towards the 150-word limit. `lib/validateEmail.ts` checks: subject < 50 characters and names the company, body < 150 words, a specific first line (it mentions a founder, investor, number, quote, or shares 3 or more words with the opener fact), exactly one question, no exclamation marks, no banned phrases or spam words (whole-word matching), plain text, no placeholders, and the unsubscribe footer. On failure, Gemini rewrites with the list of failed checks, at most twice. Every attempt is stored in `drafts.checks.history`.
+- **No invented emails.** `drafts.to_email` is filled only from a known founder email, so for news-sourced leads it starts empty and Rohit types it in.
+- **Shared deadline.** "Run pipeline now" runs ingest → extract → qualify → enrich → score-draft in one request, with a 250 s shared deadline (Vercel limit: 300 s). Stages stop starting new work at the deadline, and the UI says how many items are left for the next run.

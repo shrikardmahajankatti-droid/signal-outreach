@@ -212,8 +212,8 @@ export async function upsertStartup(
   return { startupId: existing.id, outcome }
 }
 
-export async function runExtract(runId?: number): Promise<StageResult> {
-  const started = Date.now()
+export async function runExtract(runId?: number, deadline = Date.now() + TIME_BUDGET_MS): Promise<StageResult> {
+  const stopAt = Math.min(Date.now() + TIME_BUDGET_MS, deadline)
   const db = getDb()
   const [cfg, thesis] = await Promise.all([loadQualificationConfig(), loadThesis()])
   const fx: FxConfig = { inr_per_usd: cfg.inr_per_usd, fx_per_usd: cfg.fx_per_usd }
@@ -236,7 +236,7 @@ export async function runExtract(runId?: number): Promise<StageResult> {
 
   // Gemini calls run in parallel; database merges run one at a time to keep dedupe exact.
   const results = await mapLimit(batches, CONCURRENCY, async (batch) => {
-    if (Date.now() - started > TIME_BUDGET_MS) return { batch, deferred: true as const }
+    if (Date.now() > stopAt) return { batch, deferred: true as const }
     try {
       const inputs: ExtractInput[] = await Promise.all(
         batch.map(async (a, i) => ({
