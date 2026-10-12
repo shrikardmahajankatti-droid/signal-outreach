@@ -2,7 +2,7 @@
 
 Every morning Signal finds startups that announced a **pre-seed / seed** round in the last 24–48 hours, rejects the ones that don't fit, researches the ones that do, and drafts a personal outreach email for each. Rohit approves every email before it is sent.
 
-> Status: **Phase 2, database.** Neon schema and migrations are in place, and `npm run setup` loads the thesis and rules from `qualification.md`. Pipeline stages come next.
+> Status: **Phase 3, ingest.** Live news is pulled from RSS feeds, GNews, NewsData.io and investor portfolio pages, de-duplicated, and shown on the Pipeline page. Extraction and qualification come next.
 
 ## Stack
 
@@ -17,6 +17,8 @@ npm run db:migrate           # apply drizzle/*.sql to Neon
 npm run setup                # load thesis + rules from qualification.md, seed sources/investors
 npm run dev
 ```
+
+Run a stage locally without the UI: `npm run stage -- ingest` (or `-- all`).
 
 `npm run setup` is idempotent and never overwrites edits made in the UI. Use `npm run setup -- --force` to reload config, thesis and email rules from the files.
 
@@ -54,6 +56,11 @@ Secrets live only in `.env.local` (git-ignored) and Vercel environment variables
 | Config loader (fresh on every run) | `lib/config.ts` |
 | `qualification.md` parser | `lib/qualification/parse-md.ts` |
 | Setup (step 0) | `scripts/setup.ts` |
+| Ingest stage | `lib/pipeline/ingest.ts` (+ fetchers in `lib/ingest/*`) |
+| Stage registry / run records | `lib/pipeline/stages.ts`, `lib/pipeline/runs.ts` |
+| Cron routes (one per stage) | `app/api/cron/[stage]/route.ts` → `/api/cron/ingest`, … |
+| URL / domain / name normalisation | `lib/domain.ts` |
+| Pipeline canvas + stage drawer | `components/pipeline/flow.tsx`, `lib/pipeline/overview.ts` |
 | "Run pipeline now" | `components/shell/run-pipeline-button.tsx` → `app/api/pipeline/run` |
 
 ## Decisions and notes
@@ -65,3 +72,8 @@ Secrets live only in `.env.local` (git-ignored) and Vercel environment variables
 - **Config beyond section 7.** `qualification.md` describes some numbers in prose (soft-signal penalties, the ≤ $3M size proxy, FX). These are stored as extra `qualification_config` keys (`penalty_*`, `bonus_serial_founder`, `soft_age_years`, `small_round_proxy_usd`, `fx_per_usd`, `flag_stages`) so nothing is hard-coded.
 - **Accelerator profile.** Emails need an accelerator name and offer. A placeholder profile ("Launchpad Accelerator") is stored in `app_settings.accelerator_profile`. Replace it with the real one.
 - **Neon region.** The project is in `aws-ap-southeast-1` (Singapore), the closest region to India.
+- **Ingest pre-filter.** Before anything reaches Gemini, ingest keeps only items whose title or snippet mentions raising money (raises, seed, round, crore…) and that are no older than `late_catch_days`. G1 is still decided by Gemini extraction.
+- **Dedupe at ingest.** Articles are unique by canonical-URL hash (tracking params stripped). A normalised-title hash also catches the same story syndicated under different URLs (e.g. Google News redirect links).
+- **Investor portfolio diff.** Each portfolio page is read through Jina Reader, and company identifiers are taken from the links on it (external domains, or single-path slugs on the investor's own site). The first read is a baseline. After that, newly listed companies become `portfolio` articles. Inflection Point Ventures' page renders its portfolio client-side, so its snapshot only captures navigation links. 100X.VC's portfolio URL returns 404, so it is deactivated rather than deleted.
+- **Missing API keys.** A source whose key isn't set (GNews, NewsData) is counted as `sources_skipped`, not as a failure.
+- **Cron route shape.** One dynamic route, `app/api/cron/[stage]`, serves `/api/cron/ingest`, `/api/cron/extract`, and so on. Each checks `Authorization: Bearer $CRON_SECRET`. "Run pipeline now" calls the stages in-process, so the secret never reaches the browser.

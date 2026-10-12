@@ -56,6 +56,8 @@ export const articles = pgTable(
     url: text("url").notNull(),
     urlHash: text("url_hash").notNull().unique(),
     title: text("title").notNull(),
+    // Normalised-title hash: the same story syndicated under different URLs is stored once.
+    titleHash: text("title_hash"),
     source: text("source").notNull(),
     sourceType: text("source_type").notNull(),
     publishedAt: timestamp("published_at", { withTimezone: true }),
@@ -69,7 +71,11 @@ export const articles = pgTable(
     isDemo: boolean("is_demo").notNull().default(false),
     ...timestamps,
   },
-  (t) => [index("articles_status_idx").on(t.status), index("articles_published_idx").on(t.publishedAt)]
+  (t) => [
+    index("articles_status_idx").on(t.status),
+    index("articles_published_idx").on(t.publishedAt),
+    index("articles_title_hash_idx").on(t.titleHash),
+  ]
 )
 
 // ─── Startups ────────────────────────────────────────────────────────────────

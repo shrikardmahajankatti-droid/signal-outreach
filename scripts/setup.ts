@@ -88,15 +88,20 @@ const APP_SETTINGS: Record<string, unknown> = {
 
 const SOURCES = [
   { name: "Inc42 Buzz", type: "rss", url: "https://inc42.com/buzz/feed/" },
-  { name: "Entrackr", type: "rss", url: "https://entrackr.com/feed/" },
+  { name: "Entrackr", type: "rss", url: "https://entrackr.com/rss" },
   { name: "YourStory", type: "rss", url: "https://yourstory.com/feed" },
   { name: "StartupTalky", type: "rss", url: "https://startuptalky.com/rss/" },
   { name: "TechCrunch Venture", type: "rss", url: "https://techcrunch.com/category/venture/feed/" },
-  { name: "e27", type: "rss", url: "https://e27.co/feed/" },
+  { name: "e27", type: "rss", url: "https://e27.co/index_wp.php/feed/" },
   {
     name: "Google News: seed rounds (India)",
     type: "rss",
     url: "https://news.google.com/rss/search?q=startup+raises+(%22seed+round%22+OR+%22pre-seed%22)+when:2d&hl=en-IN&gl=IN&ceid=IN:en",
+  },
+  {
+    name: "Google News: raises seed (India)",
+    type: "rss",
+    url: "https://news.google.com/rss/search?q=%22raises%22+%22seed%22+startup+India+when:2d&hl=en-IN&gl=IN&ceid=IN:en",
   },
   { name: "GNews: seed rounds", type: "gnews", url: "startup raises seed round" },
   { name: "GNews: pre-seed", type: "gnews", url: "startup raises pre-seed" },
@@ -104,11 +109,10 @@ const SOURCES = [
 ]
 
 const INVESTORS = [
-  { name: "Blume Ventures", portfolioUrl: "https://blume.vc/portfolio" },
+  { name: "Blume Ventures", portfolioUrl: "https://blume.vc/companies" },
   { name: "Prime Venture Partners", portfolioUrl: "https://www.primevp.in/portfolio" },
   { name: "Antler India", portfolioUrl: "https://www.antler.co/portfolio" },
-  { name: "100X.VC", portfolioUrl: "https://www.100x.vc/portfolio" },
-  { name: "Inflection Point Ventures", portfolioUrl: "https://www.ipventures.in/portfolio" },
+  { name: "Inflection Point Ventures", portfolioUrl: "https://ipventures.in/portfolio" },
 ]
 
 async function main() {
