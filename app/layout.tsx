@@ -6,6 +6,7 @@ import { Topbar } from "@/components/shell/topbar"
 import { MobileNav } from "@/components/shell/mobile-nav"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { isDemoMode } from "@/lib/env"
+import { pendingDraftCount } from "@/lib/queries"
 
 export const dynamic = "force-dynamic"
 
@@ -16,9 +17,8 @@ export const metadata: Metadata = {
   description: "Timed funding outreach engine for early-stage startups",
 }
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  // Pending-draft count comes from Neon from Phase 2 onward.
-  const pendingDrafts = 0
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const pendingDrafts = await pendingDraftCount()
   return (
     <html lang="en" className={inter.variable}>
       <body>

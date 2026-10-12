@@ -1,0 +1,197 @@
+{
+  "_about": "Real funding news from 5–8 Oct 2026 (public press coverage). Used as seed/demo data for the Funding Outreach Engine. Founder email addresses are intentionally NOT included. In DEMO_MODE every email is redirected to TEST_INBOX. 'expected' is what the pipeline should decide with the default thesis + qualification.md.",
+  "fx": { "inr_per_usd": 85 },
+  "articles": [
+    {
+      "company_name": "Desible.ai",
+      "company_domain": "desible.ai",
+      "round_stage": "seed extension",
+      "round_label_in_press": "Seed Plus",
+      "amount_inr": 320000000,
+      "amount_usd_reported": 3300000,
+      "announced_date": "2026-10-07",
+      "investors": ["Prime Venture Partners (lead)", "Invention Engine"],
+      "founders": [
+        { "name": "Omkar Raikar", "title": "Founder" },
+        { "name": "Uttam Tiwari", "title": "Co-founder" }
+      ],
+      "hq_city": "Bengaluru",
+      "hq_country": "India",
+      "founded_year": 2025,
+      "sector": "AI / BFSI workflow automation (B2B)",
+      "what_they_do": "Agentic AI orchestration for banks, NBFCs and insurers: automates customer engagement, servicing, operations and compliance workflows. Starts with voice, expanding to WhatsApp, SMS and email, with auditable disclosures, consent and escalations.",
+      "use_of_funds": "Agentic AI capabilities, compliance infrastructure, BFSI product development, go-to-market beyond voice",
+      "personal_hook": "Uttam Tiwari describes voice AI as the entry point, not the final destination.",
+      "sources": [
+        "https://inc42.com/buzz/from-dailyobjects-to-stockgro-indian-startups-raised-about-123-mn-this-week/",
+        "https://www.startupresearcher.com/news/desible-ai-raises-inr32-crore-in-seed-plus-round",
+        "https://dealroom.co/news/160545-desible-ai-raises-3-31m-seed-to-automate-bfsi-workflows-with-ai-agents/"
+      ],
+      "expected": { "decision": "accepted", "approx_fit": 88, "flags": [] }
+    },
+    {
+      "company_name": "CurvetAI",
+      "company_domain": null,
+      "round_stage": "pre-seed",
+      "amount_inr": 60000000,
+      "amount_usd_reported": 620000,
+      "announced_date": "2026-10-06",
+      "investors": ["Merak Ventures (lead)", "Angel investors"],
+      "founders": [
+        { "name": "Vivek Dubey", "title": "Co-founder & CEO" },
+        { "name": "Utkarsh Gupta", "title": "Co-founder & CTO" }
+      ],
+      "hq_city": "Pune",
+      "hq_country": "India",
+      "founded_year": 2025,
+      "sector": "AI / multi-model workspace (B2B)",
+      "what_they_do": "One workspace to access, compare and chain multiple AI models (text, image, audio, video), with tasks routed to the best model. 100,000+ monthly users, India and US largest markets, revenue started.",
+      "use_of_funds": "Tech infrastructure, team expansion, agent-based workflow capabilities",
+      "personal_hook": "Vivek Dubey: \"AI has become incredibly capable, but increasingly fragmented.\"",
+      "sources": [
+        "https://startuptalky.com/news/unified-ai-workspace-curvetai-raises-rs-6-crore-in-pre-seed-round-led-by-merak-ventures/",
+        "https://inc42.com/buzz/from-dailyobjects-to-stockgro-indian-startups-raised-about-123-mn-this-week/"
+      ],
+      "expected": { "decision": "accepted", "approx_fit": 82, "flags": ["domain_to_enrich"] }
+    },
+    {
+      "company_name": "Zomint",
+      "company_domain": null,
+      "round_stage": "seed",
+      "amount_inr": 360000000,
+      "amount_usd_reported": 3700000,
+      "announced_date": "2026-10-07",
+      "investors": ["Lightspeed (co-lead)", "Prime Venture Partners (co-lead)"],
+      "founders": [
+        { "name": "Aman Mittal", "title": "Co-founder" },
+        { "name": "Shavir Bansal", "title": "Co-founder" }
+      ],
+      "hq_city": null,
+      "hq_country": "India",
+      "founded_year": 2025,
+      "sector": "Fintech / wealth tech (B2C)",
+      "what_they_do": "Hybrid wealth management for working professionals and families: a dedicated wealth expert per family, backed by research and AI tools that consolidate portfolios and track agreed actions. AMFI-registered MF distributor.",
+      "use_of_funds": "Wealth and investment teams, tech platform, investor education, services beyond domestic mutual funds",
+      "personal_hook": "Each relationship manager already serves 250+ families, so scaling advisor productivity is the core challenge.",
+      "sources": [
+        "https://www.startupresearcher.com/news/wealth-management-startup-zomint-raises-36-crore-in-seed-round",
+        "https://inc42.com/buzz/from-dailyobjects-to-stockgro-indian-startups-raised-about-123-mn-this-week/",
+        "https://www.dealstreetasia.com/?p=497476"
+      ],
+      "expected": { "decision": "accepted", "approx_fit": 76, "flags": ["multi_source_merged"] }
+    },
+    {
+      "company_name": "Credfix",
+      "company_domain": null,
+      "round_stage": "seed",
+      "amount_inr": 161000000,
+      "amount_usd_reported": 1600000,
+      "announced_date": "2026-10-07",
+      "investors": ["Tanglin Venture Partners (lead)", "Stargazer"],
+      "founders": [
+        { "name": "Ranjan Agarwal", "title": "Co-founder" },
+        { "name": "Neeraj Kulkarni", "title": "Co-founder" },
+        { "name": "Ayush Kedia", "title": "Co-founder" }
+      ],
+      "hq_city": null,
+      "hq_country": "India",
+      "founded_year": 2025,
+      "sector": "Fintech / AI debt resolution (B2C)",
+      "what_they_do": "AI-first debt resolution for borrowers: debt assessment, loan resolution and consolidation, AI legal assistant for notices. Products: Risi (AI financial assistant), Neytra (AI call shield).",
+      "use_of_funds": "Product development, AI capabilities, borrower support across India",
+      "personal_hook": "Ranjan Agarwal: financial distress comes with confusion, anxiety and \"a lack of trustworthy guidance.\"",
+      "sources": [
+        "https://www.startupresearcher.com/news/credfix-raises-16-1-crore-in-seed-funding",
+        "https://inc42.com/buzz/from-dailyobjects-to-stockgro-indian-startups-raised-about-123-mn-this-week/"
+      ],
+      "expected": { "decision": "accepted", "approx_fit": 74, "flags": [] }
+    },
+    {
+      "company_name": "CureMeAbroad",
+      "round_stage": "pre-seed",
+      "amount_usd_reported": 1100000,
+      "announced_date": "2026-10-06",
+      "investors": ["SteerX Ventures (lead)", "AIRA"],
+      "hq_country": "India",
+      "sector": "Health tech / in-clinic healthcare (B2C)",
+      "sources": ["https://inc42.com/buzz/from-dailyobjects-to-stockgro-indian-startups-raised-about-123-mn-this-week/"],
+      "expected": { "decision": "maybe", "approx_fit": 60, "flags": ["services_heavy_model"] }
+    },
+    {
+      "company_name": "The Dough Therapy",
+      "round_stage": "seed",
+      "amount_usd_reported": 543000,
+      "announced_date": "2026-10-07",
+      "investors": ["Michigan Capital Advisors (lead)", "Equiglobe Investment"],
+      "hq_country": "India",
+      "sector": "Foodtech / QSR (B2C)",
+      "sources": ["https://inc42.com/buzz/from-dailyobjects-to-stockgro-indian-startups-raised-about-123-mn-this-week/"],
+      "expected": { "decision": "rejected", "reason_codes": ["REJ_LOW_FIT"], "why": "Restaurant chain, not a tech product; outside thesis sectors" }
+    },
+    {
+      "company_name": "Zinara",
+      "round_stage": "pre-seed",
+      "amount_usd_reported": 380000,
+      "announced_date": "2026-10-08",
+      "investors": ["Inflection Point Ventures (lead)", "Nine Jewellery", "Nikita Dutta"],
+      "hq_country": "India",
+      "sector": "E-commerce / D2C jewellery (B2C)",
+      "sources": ["https://inc42.com/buzz/from-dailyobjects-to-stockgro-indian-startups-raised-about-123-mn-this-week/"],
+      "expected": { "decision": "rejected", "reason_codes": ["REJ_LOW_FIT"], "why": "D2C consumer brand; outside thesis sectors" }
+    },
+    {
+      "company_name": "DailyObjects",
+      "round_stage": "series c",
+      "amount_usd_reported": 34300000,
+      "announced_date": "2026-10-08",
+      "investors": ["Xponentia Capital Partners", "Anicut Capital", "Axiom Asia Private Capital"],
+      "hq_country": "India",
+      "sector": "E-commerce / D2C lifestyle",
+      "sources": ["https://inc42.com/buzz/from-dailyobjects-to-stockgro-indian-startups-raised-about-123-mn-this-week/"],
+      "expected": { "decision": "rejected", "reason_codes": ["REJ_LATE_STAGE", "REJ_ROUND_TOO_BIG"] }
+    },
+    {
+      "company_name": "StockGro",
+      "round_stage": "series b",
+      "amount_usd_reported": 10400000,
+      "announced_date": "2026-10-06",
+      "investors": ["BITKRAFT Ventures (lead)", "Aditum Venture Capital Fund", "India SME Growth Fund"],
+      "hq_country": "India",
+      "sector": "Fintech / investment tech",
+      "sources": ["https://inc42.com/buzz/from-dailyobjects-to-stockgro-indian-startups-raised-about-123-mn-this-week/"],
+      "expected": { "decision": "rejected", "reason_codes": ["REJ_LATE_STAGE", "REJ_ROUND_TOO_BIG"] }
+    },
+    {
+      "company_name": "Lumio",
+      "round_stage": "series a",
+      "amount_usd_reported": 12000000,
+      "announced_date": "2026-10-07",
+      "investors": ["Blume Ventures (lead)", "Stellaris Venture Partners", "3one4 Capital"],
+      "hq_country": "India",
+      "sector": "Consumer electronics / D2C",
+      "sources": ["https://inc42.com/buzz/from-dailyobjects-to-stockgro-indian-startups-raised-about-123-mn-this-week/"],
+      "expected": { "decision": "rejected", "reason_codes": ["REJ_LATE_STAGE", "REJ_ROUND_TOO_BIG"] }
+    },
+    {
+      "company_name": "NeoGrowth",
+      "round_stage": "undisclosed (equity + debt)",
+      "amount_usd_reported": 8700000,
+      "announced_date": "2026-10-09",
+      "investors": ["FMO (Dutch development bank)", "LeapFrog Investments"],
+      "hq_country": "India",
+      "sector": "Fintech / MSME lending",
+      "sources": ["https://inc42.com/buzz/from-dailyobjects-to-stockgro-indian-startups-raised-about-123-mn-this-week/"],
+      "expected": { "decision": "rejected", "reason_codes": ["REJ_EXCLUDED_SECTOR", "REJ_NON_EQUITY"], "why": "Established lending-only company; part-debt round; not an early-stage startup" }
+    },
+    {
+      "company_name": "Healthleap",
+      "round_stage": "undisclosed",
+      "amount_usd_reported": 38000000,
+      "announced_date": "2026-10-07",
+      "hq_country": "Global",
+      "sector": "Health tech / hospital AI",
+      "sources": ["https://techcrunch.com/2026/10/07/healthleap-raises-38m-for-its-ai-that-flags-hospital-patients-who-may-need-a-closer-look/"],
+      "expected": { "decision": "rejected", "reason_codes": ["REJ_ROUND_TOO_BIG"] }
+    }
+  ]
+}
