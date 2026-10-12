@@ -1,18 +1,23 @@
 import { PageIntro } from "@/components/signal/page-intro"
 import { SectionCard } from "@/components/signal/section-card"
 import { ErrorState } from "@/components/signal/empty-state"
+import { AcceleratorForm, DemoControls, InvestorsList, ManualRuns, SourcesList } from "@/components/settings/controls"
 import { getDb, schema } from "@/db"
-import { isDemoMode } from "@/lib/env"
+import { getSetting } from "@/lib/config"
+import { getDemoMode, getTestInbox, liveSendAllowed } from "@/lib/env"
 import { databaseReachable } from "@/lib/queries"
+import type { AcceleratorProfile } from "@/lib/prompts/draft"
 import { cn } from "@/lib/utils"
 
-const INTEGRATIONS: { name: string; env: string }[] = [
-  { name: "Gemini", env: "GEMINI_API_KEY" },
-  { name: "Resend", env: "RESEND_API_KEY" },
-  { name: "HubSpot", env: "HUBSPOT_ACCESS_TOKEN" },
-  { name: "Tavily", env: "TAVILY_API_KEY" },
-  { name: "GNews", env: "GNEWS_API_KEY" },
-  { name: "NewsData.io", env: "NEWSDATA_API_KEY" },
+const INTEGRATIONS: { name: string; env: string[]; note?: string }[] = [
+  { name: "Gemini", env: ["GEMINI_API_KEY"], note: process.env.GEMINI_MODEL },
+  { name: "Resend", env: ["RESEND_API_KEY", "OUTREACH_FROM"] },
+  { name: "Resend webhook", env: ["RESEND_WEBHOOK_SECRET"], note: "/api/resend/webhook" },
+  { name: "HubSpot", env: ["HUBSPOT_ACCESS_TOKEN"] },
+  { name: "Tavily", env: ["TAVILY_API_KEY"] },
+  { name: "GNews", env: ["GNEWS_API_KEY"] },
+  { name: "NewsData.io", env: ["NEWSDATA_API_KEY"] },
+  { name: "Cron secret", env: ["CRON_SECRET"] },
 ]
 
 function Dot({ ok }: { ok: boolean }) {
@@ -20,71 +25,79 @@ function Dot({ ok }: { ok: boolean }) {
 }
 
 export default async function SettingsPage() {
-  const demo = isDemoMode()
-  const dbOk = await databaseReachable()
-  let lists: { sources: (typeof schema.sources.$inferSelect)[]; investors: (typeof schema.investors.$inferSelect)[] } | null = null
-  let listError: string | null = null
-  if (dbOk) {
-    try {
-      const db = getDb()
-      const [sources, investors] = await Promise.all([
-        db.select().from(schema.sources).orderBy(schema.sources.id),
-        db.select().from(schema.investors).orderBy(schema.investors.id),
-      ])
-      lists = { sources, investors }
-    } catch (err) {
-      listError = (err as Error).message
-    }
+  const [dbOk, demo, testInbox] = await Promise.all([databaseReachable(), getDemoMode(), getTestInbox()])
+  let data
+  try {
+    const db = getDb()
+    const [sources, investors, profile] = await Promise.all([
+      db.select().from(schema.sources).orderBy(schema.sources.id),
+      db.select().from(schema.investors).orderBy(schema.investors.id),
+      getSetting<AcceleratorProfile>("accelerator_profile"),
+    ])
+    data = { sources, investors, profile }
+  } catch (err) {
+    return (
+      <div>
+        <PageIntro title="Settings" />
+        <SectionCard><ErrorState message={(err as Error).message} /></SectionCard>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-4">
-      <PageIntro title="Settings" description="Sources, integrations and demo controls." />
-      <SectionCard title="Integrations" bodyClassName="divide-y divide-line">
-        <div className="flex items-center justify-between px-4 py-3 text-[13px]">
-          <span className="font-medium">Neon</span>
-          <span className="flex items-center gap-2 text-text-secondary"><Dot ok={dbOk} />{dbOk ? "Connected" : "Unreachable"}</span>
-        </div>
-        {INTEGRATIONS.map((i) => {
-          const ok = Boolean(process.env[i.env])
-          return (
-            <div key={i.name} className="flex items-center justify-between px-4 py-3 text-[13px]">
-              <span className="font-medium">{i.name}</span>
-              <span className="flex items-center gap-2 text-text-secondary"><Dot ok={ok} />{ok ? "Configured" : "Missing key"}</span>
-            </div>
-          )
-        })}
-      </SectionCard>
-
+      <PageIntro title="Settings" description="Sources, integrations, demo controls and the accelerator profile used in emails." />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <SectionCard title="News sources" bodyClassName="divide-y divide-line">
-          {listError && <ErrorState message={listError} />}
-          {lists?.sources.map((s) => (
-            <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-[13px]">
-              <div className="min-w-0">
-                <p className="truncate font-medium">{s.name}</p>
-                <p className="truncate text-xs text-text-secondary">{s.url}</p>
+        <SectionCard title="Integrations" bodyClassName="divide-y divide-line">
+          <div className="flex items-center justify-between px-4 py-2.5 text-[13px]">
+            <span className="font-medium">Neon</span>
+            <span className="flex items-center gap-2 text-text-secondary"><Dot ok={dbOk} />{dbOk ? "Connected" : "Unreachable"}</span>
+          </div>
+          {INTEGRATIONS.map((i) => {
+            const ok = i.env.every((k) => Boolean(process.env[k]))
+            return (
+              <div key={i.name} className="flex items-center justify-between px-4 py-2.5 text-[13px]">
+                <span className="font-medium">{i.name}{i.note && <span className="ml-2 font-normal text-[12px] text-text-secondary">{i.note}</span>}</span>
+                <span className="flex items-center gap-2 text-text-secondary"><Dot ok={ok} />{ok ? "Configured" : `Missing ${i.env.filter((k) => !process.env[k]).join(", ")}`}</span>
               </div>
-              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-text-secondary uppercase">{s.type}</span>
-            </div>
-          ))}
+            )
+          })}
         </SectionCard>
-        <SectionCard title="Investor portfolio pages" bodyClassName="divide-y divide-line">
-          {lists?.investors.map((i) => (
-            <div key={i.id} className="px-4 py-2.5 text-[13px]">
-              <p className="font-medium">{i.name}</p>
-              <p className="truncate text-xs text-text-secondary">{i.portfolioUrl}</p>
-            </div>
-          ))}
-        </SectionCard>
+        <div className="space-y-4">
+          <SectionCard title="Demo mode">
+            <DemoControls demo={demo} testInbox={testInbox ?? ""} liveAllowed={liveSendAllowed()} />
+          </SectionCard>
+          <SectionCard title="Manual runs">
+            <ManualRuns />
+          </SectionCard>
+        </div>
       </div>
 
-      <SectionCard title="Demo mode" bodyClassName="p-4 text-[13px] text-text-secondary">
-        Demo mode is <span className="font-medium text-foreground">{demo ? "on" : "off"}</span>.{" "}
-        {demo
-          ? "Every outgoing email is redirected to the test inbox with a banner naming the real recipient."
-          : "Emails go to real founders after approval."}
-      </SectionCard>
+      {data.profile && (
+        <SectionCard title="Accelerator profile (used in every draft)">
+          <AcceleratorForm profile={data.profile} />
+        </SectionCard>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <SectionCard title="News sources">
+          <SourcesList
+            sources={data.sources.map((s) => ({ id: s.id, name: s.name, type: s.type, url: s.url, active: s.active, lastError: s.lastError, lastFetchedAt: s.lastFetchedAt?.toISOString() ?? null }))}
+          />
+        </SectionCard>
+        <SectionCard title="Investor portfolio pages">
+          <InvestorsList
+            investors={data.investors.map((i) => ({
+              id: i.id,
+              name: i.name,
+              portfolioUrl: i.portfolioUrl,
+              active: i.active,
+              lastError: i.lastError,
+              companies: ((i.lastSnapshot as { companies?: string[] } | null)?.companies ?? []).length,
+            }))}
+          />
+        </SectionCard>
+      </div>
     </div>
   )
 }

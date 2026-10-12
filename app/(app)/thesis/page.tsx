@@ -1,91 +1,56 @@
 import { PageIntro } from "@/components/signal/page-intro"
 import { SectionCard } from "@/components/signal/section-card"
 import { ErrorState } from "@/components/signal/empty-state"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ThesisBuilder } from "@/components/thesis/builder"
 import { loadEmailRules, loadQualificationConfig, loadThesis } from "@/lib/config"
-
-const usd = (n: number) => `$${(n / 1_000_000).toLocaleString("en-US", { maximumFractionDigits: 1 })}M`
-
-const WEIGHT_LABELS: Record<string, string> = {
-  sector: "Sector match",
-  geography: "Geography match",
-  business_model: "Business model",
-  team: "Team signal",
-  timing: "Timing / need",
-}
+import type { RulesPayload } from "@/lib/thesis-preview"
+import type { Factor } from "@/lib/prompts/score"
 
 export default async function ThesisPage() {
   let data
   try {
-    const [cfg, thesis, rules] = await Promise.all([loadQualificationConfig(), loadThesis(), loadEmailRules()])
-    data = { cfg, thesis, rules }
+    data = await Promise.all([loadQualificationConfig(), loadThesis(), loadEmailRules()])
   } catch (err) {
     return (
       <div>
         <PageIntro title="Thesis & Rules" />
-        <SectionCard>
-          <ErrorState message={(err as Error).message} />
-        </SectionCard>
+        <SectionCard><ErrorState message={(err as Error).message} /></SectionCard>
       </div>
     )
   }
-  const { cfg, thesis, rules } = data
-
-  const conditions: [string, string, string][] = [
-    ["Employees", "is at most", String(cfg.max_employees)],
-    ["Round stage", "is any of", cfg.allowed_stages.join(", ")],
-    ["Round size", "is at most", `${usd(cfg.max_round_usd)} (flag up to ${usd(cfg.hard_max_round_usd)})`],
-    ["Total raised", "is at most", usd(cfg.max_total_raised_usd)],
-    ["Revenue", "is at most", usd(cfg.max_revenue_usd)],
-    ["Company age", "is at most", `${cfg.max_company_age_years} years`],
-    ["Announced", "within", `${cfg.fresh_window_hours} hours (late catch ≤ ${cfg.late_catch_days} days)`],
-    ["Sector", "is any of", thesis.sectors.join(", ")],
-    ["Geography", "is any of", thesis.geographies.join(", ")],
-    ["Excluded sector", "is none of", thesis.excludedSectors.join(", ")],
-    ["Fit score", "is at least", `${thesis.fitThreshold} (maybe ≥ ${thesis.maybeThreshold})`],
-  ]
-  const weights = thesis.weights as Record<string, number>
-
+  const [cfg, thesis, rules] = data
+  const initial: RulesPayload = {
+    config: {
+      max_employees: cfg.max_employees,
+      max_company_age_years: cfg.max_company_age_years,
+      max_round_usd: cfg.max_round_usd,
+      hard_max_round_usd: cfg.hard_max_round_usd,
+      max_total_raised_usd: cfg.max_total_raised_usd,
+      max_revenue_usd: cfg.max_revenue_usd,
+      allowed_stages: cfg.allowed_stages,
+      fresh_window_hours: cfg.fresh_window_hours,
+      late_catch_days: cfg.late_catch_days,
+      allow_crowdfunding: cfg.allow_crowdfunding,
+      reject_mixed_debt_rounds: cfg.reject_mixed_debt_rounds,
+    },
+    thesis: {
+      sectors: thesis.sectors,
+      geographies: thesis.geographies,
+      businessModels: thesis.businessModels,
+      teamSignals: thesis.teamSignals,
+      excludedSectors: thesis.excludedSectors,
+      weights: thesis.weights as Record<Factor, number>,
+      fitThreshold: thesis.fitThreshold,
+      maybeThreshold: thesis.maybeThreshold,
+    },
+  }
   return (
     <div>
-      <PageIntro title="Thesis & Rules" description="Live values from Neon. Edits apply from the next run, with no deploy." />
-      <Tabs defaultValue="thesis">
-        <TabsList className="mb-4">
-          <TabsTrigger value="thesis">Thesis & gates</TabsTrigger>
-          <TabsTrigger value="email">Email rules</TabsTrigger>
-        </TabsList>
-        <TabsContent value="thesis" className="space-y-4">
-          <SectionCard title="Conditions" bodyClassName="divide-y divide-line">
-            {conditions.map(([field, op, value]) => (
-              <div key={field} className="grid grid-cols-1 gap-2 px-4 py-3 text-[13px] sm:grid-cols-[180px_120px_1fr]">
-                <span className="font-medium">{field}</span>
-                <span className="text-text-secondary">{op}</span>
-                <span>{value}</span>
-              </div>
-            ))}
-          </SectionCard>
-          <SectionCard title="Fit weights" bodyClassName="divide-y divide-line">
-            {Object.entries(WEIGHT_LABELS).map(([key, label]) => (
-              <div key={key} className="flex items-center gap-4 px-4 py-3 text-[13px]">
-                <span className="w-40 font-medium">{label}</span>
-                <div className="h-1.5 flex-1 rounded-full bg-muted">
-                  <div className="h-1.5 rounded-full bg-primary" style={{ width: `${weights[key] ?? 0}%` }} />
-                </div>
-                <span className="w-8 text-right tabular-nums">{weights[key] ?? 0}</span>
-              </div>
-            ))}
-          </SectionCard>
-        </TabsContent>
-        <TabsContent value="email">
-          <SectionCard title="Email rules" bodyClassName="divide-y divide-line text-[13px]">
-            <div className="flex justify-between px-4 py-3"><span className="font-medium">Subject length</span><span>under {rules.subjectMaxChars} characters</span></div>
-            <div className="flex justify-between px-4 py-3"><span className="font-medium">Body length</span><span>under {rules.bodyMaxWords} words</span></div>
-            <div className="px-4 py-3"><p className="font-medium">Banned phrases</p><p className="mt-1 text-text-secondary">{rules.bannedPhrases.join(" · ")}</p></div>
-            <div className="px-4 py-3"><p className="font-medium">Spam words</p><p className="mt-1 text-text-secondary">{rules.spamWords.join(" · ")}</p></div>
-            <div className="px-4 py-3"><p className="font-medium">Footer</p><pre className="mt-1 font-sans whitespace-pre-wrap text-text-secondary">{rules.footer}</pre></div>
-          </SectionCard>
-        </TabsContent>
-      </Tabs>
+      <PageIntro title="Thesis & Rules" description="Live values from Neon, read fresh on every run. Changing them needs no code change or deploy." />
+      <ThesisBuilder
+        initial={initial}
+        initialEmail={{ subjectMaxChars: rules.subjectMaxChars, bodyMaxWords: rules.bodyMaxWords, bannedPhrases: rules.bannedPhrases, spamWords: rules.spamWords, footer: rules.footer }}
+      />
     </div>
   )
 }

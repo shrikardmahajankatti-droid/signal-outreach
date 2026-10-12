@@ -260,3 +260,11 @@ describe.skipIf(!process.env.RUN_DB_TESTS || !process.env.DATABASE_URL)("demo re
     expect(rows[0].flags).toContain("multi_source_merged")
   })
 })
+
+describe("merging never introduces a hard-gate fact", () => {
+  it("keeps the excluded-sector judgement from the extraction the gates ran on", () => {
+    const base = demoFacts(byName("Credfix"))
+    const later = demoFacts(byName("Credfix"), { excluded_sector_match: "lending-only NBFCs" })
+    expect(mergeFacts(base, later).excluded_sector_match).toBeNull()
+  })
+})

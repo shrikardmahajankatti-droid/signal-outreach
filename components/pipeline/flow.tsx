@@ -128,7 +128,7 @@ export function PipelineFlow({ stages }: { stages: StageOverview[] }) {
                             {it.subtitle && <p className="text-xs text-text-secondary">{it.subtitle}{it.status ? ` · ${it.status}` : ""}</p>}
                           </div>
                           {it.href && (
-                            <a href={it.href} target="_blank" rel="noreferrer" className="mt-0.5 text-text-secondary hover:text-link" aria-label="Open source">
+                            <a href={it.href} {...(it.href.startsWith("/") ? {} : { target: "_blank", rel: "noreferrer" })} className="mt-0.5 text-text-secondary hover:text-link" aria-label="Open">
                               <ExternalLink className="size-3.5" />
                             </a>
                           )}

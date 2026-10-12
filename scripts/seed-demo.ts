@@ -4,8 +4,9 @@
 import "./load-env"
 import { inArray } from "drizzle-orm"
 import { getDb, schema } from "../db"
-import { buildDemoArticles, demoReferenceDate, DEMO_ITEMS } from "../lib/demo"
-import { titleHash, urlHash, normalizeCompanyName } from "../lib/domain"
+import { DEMO_ITEMS } from "../lib/demo"
+import { insertDemoArticles } from "../lib/pipeline/demo-seed"
+import { normalizeCompanyName } from "../lib/domain"
 import { PIPELINE_ORDER, runStage } from "../lib/pipeline/stages"
 import { resetDemo } from "../lib/pipeline/demo-reset"
 
@@ -13,31 +14,8 @@ async function main() {
   const db = getDb()
   if (process.argv.includes("--reset")) console.log("reset:", await resetDemo())
 
-  await db
-    .insert(schema.appSettings)
-    .values({ key: "demo_reference_date", value: demoReferenceDate() })
-    .onConflictDoUpdate({ target: schema.appSettings.key, set: { value: demoReferenceDate() } })
-
-  const articles = buildDemoArticles()
-  const inserted = await db
-    .insert(schema.articles)
-    .values(
-      articles.map((a) => ({
-        url: a.url,
-        urlHash: urlHash(a.url),
-        titleHash: titleHash(a.title),
-        title: a.title,
-        source: a.source,
-        sourceType: "demo",
-        publishedAt: a.publishedAt,
-        rawText: a.rawText,
-        snippet: a.rawText.slice(0, 300),
-        isDemo: true,
-      }))
-    )
-    .onConflictDoNothing({ target: schema.articles.urlHash })
-    .returning({ id: schema.articles.id })
-  console.log(`demo articles: ${inserted.length} inserted (${articles.length} total)`)
+  const { inserted, total } = await insertDemoArticles()
+  console.log(`demo articles: ${inserted} inserted (${total} total)`)
 
   // Steps 3+ of the real pipeline (ingest is skipped: the demo articles are already in).
   for (const stage of PIPELINE_ORDER.filter((s) => s !== "ingest")) {

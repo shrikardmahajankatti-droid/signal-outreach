@@ -150,7 +150,7 @@ Rules:
 - founders: only people named as founder/co-founder/CEO of the raising company.
 - prior_rounds: earlier rounds of this company named in the article (e.g. ["pre-seed"]).
 - is_traditional_sme: true only when the text says it is an established non-tech business (manufacturer, trader, distributor, franchise, agency) raising its first outside money after years of operating.
-- excluded_sector_match: if the company's core business clearly falls in one of the EXCLUDED SECTORS listed in the prompt, return that list item verbatim; otherwise null.
+- excluded_sector_match: only if the company's core business IS one of the EXCLUDED SECTORS listed in the prompt, return that list item verbatim; otherwise null. Serving or advising customers of that sector does not count (e.g. a debt-resolution app for borrowers is not a lender; software for NBFCs is not an NBFC).
 - serial_founder_with_exit: true only if the article says a founder previously built and exited a company.
 - founder_quotes: verbatim quotes attributed to a founder, if any.
 - what_they_do / use_of_funds / business_model: one plain sentence each from the article, or null.`

@@ -131,6 +131,9 @@ export function mergeFacts(base: Facts, incoming: Facts): Facts {
     if ((current === null || current === undefined || current === "unknown") && value !== null && value !== undefined) out[key] = value
   }
   const merged = out as Facts
+  // Hard-gate judgements come from the extraction the gates ran on; a later article can't
+  // introduce one after the startup has been qualified (it would bypass the gate).
+  merged.excluded_sector_match = base.excluded_sector_match
   merged.investors = dedupeStrings([...base.investors, ...incoming.investors])
   const founders = new Map(base.founders.map((f) => [f.name.toLowerCase(), f]))
   for (const f of incoming.founders) {

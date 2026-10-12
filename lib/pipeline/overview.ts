@@ -112,10 +112,10 @@ export async function getPipelineOverview(): Promise<StageOverview[]> {
       [d.domain ? `domain ${d.domain}` : "no domain", `${d.founders ?? 0} founders`, `${d.posts ?? 0} posts`].join(" · ")
     ),
     await scoreDraftOverview(today),
-    empty("sync"),
-    empty("summary"),
-    empty("gate"),
-    empty("send"),
+    await stageFromEvents("sync", "hubspot_synced", today, () => "Company + Contact + Deal at Draft ready"),
+    { key: "summary", count: null, lastRun: await lastRun("summary"), items: [] },
+    await gateOverview(),
+    await sendOverview(today),
   ]
 }
 
@@ -183,5 +183,41 @@ async function scoreDraftOverview(since: Date): Promise<StageOverview> {
     count: n,
     lastRun: run,
     items: rows.map((r) => ({ title: r.name, subtitle: `fit ${r.score ?? "—"} · ${r.decision}` })),
+  }
+}
+
+async function gateOverview(): Promise<StageOverview> {
+  const db = getDb()
+  const rows = await db
+    .select({ id: schema.drafts.id, name: schema.startups.name, subject: schema.drafts.subject, fit: schema.startups.fitScore })
+    .from(schema.drafts)
+    .innerJoin(schema.startups, eq(schema.startups.id, schema.drafts.startupId))
+    .where(eq(schema.drafts.status, "pending"))
+    .orderBy(desc(schema.startups.fitScore))
+  return {
+    key: "gate",
+    count: rows.length,
+    lastRun: null,
+    items: rows.map((r) => ({ title: r.name, subtitle: `fit ${r.fit ?? "—"} · ${r.subject}`, href: `/outreach/${r.id}` })),
+  }
+}
+
+async function sendOverview(since: Date): Promise<StageOverview> {
+  const db = getDb()
+  const [sent, run] = await Promise.all([
+    db
+      .select({ id: schema.drafts.id, name: schema.startups.name, sentAt: schema.drafts.sentAt })
+      .from(schema.drafts)
+      .innerJoin(schema.startups, eq(schema.startups.id, schema.drafts.startupId))
+      .where(eq(schema.drafts.status, "sent"))
+      .orderBy(desc(schema.drafts.sentAt))
+      .limit(30),
+    lastRun("followups"),
+  ])
+  return {
+    key: "send",
+    count: sent.filter((r) => r.sentAt && r.sentAt >= since).length,
+    lastRun: run,
+    items: sent.map((r) => ({ title: r.name, subtitle: `sent ${r.sentAt?.toISOString().slice(0, 16).replace("T", " ")} UTC`, href: `/outreach/${r.id}` })),
   }
 }
