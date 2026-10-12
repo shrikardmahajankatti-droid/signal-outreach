@@ -2,7 +2,7 @@
 
 Every morning Signal finds startups that announced a **pre-seed / seed** round in the last 24–48 hours, rejects the ones that don't fit, researches the ones that do, and drafts a personal outreach email for each. Rohit approves every email before it is sent.
 
-> Status: **Phase 3, ingest.** Live news is pulled from RSS feeds, GNews, NewsData.io and investor portfolio pages, de-duplicated, and shown on the Pipeline page. Extraction and qualification come next.
+> Status: **Phase 4, extract + qualify.** Gemini Flash extracts facts with evidence from live and demo articles, and the code gates G1–G5 reject or skip with reason codes. Research, scoring and drafting come next.
 
 ## Stack
 
@@ -18,7 +18,15 @@ npm run setup                # load thesis + rules from qualification.md, seed s
 npm run dev
 ```
 
-Run a stage locally without the UI: `npm run stage -- ingest` (or `-- all`).
+Run a stage locally without the UI: `npm run stage -- ingest` (or `-- extract,qualify`, or `-- all`).
+
+Demo and tests:
+
+```bash
+npm run seed:demo      # load data/demo_startups.json as is_demo articles and run the real pipeline (steps 3+)
+npm test               # unit tests: every hard-gate rule, qualification.md §10 cases, Zomint merge
+npm run test:db        # also checks the decisions the real pipeline wrote to Neon
+```
 
 `npm run setup` is idempotent and never overwrites edits made in the UI. Use `npm run setup -- --force` to reload config, thesis and email rules from the files.
 
@@ -61,6 +69,14 @@ Secrets live only in `.env.local` (git-ignored) and Vercel environment variables
 | Cron routes (one per stage) | `app/api/cron/[stage]/route.ts` → `/api/cron/ingest`, … |
 | URL / domain / name normalisation | `lib/domain.ts` |
 | Pipeline canvas + stage drawer | `components/pipeline/flow.tsx`, `lib/pipeline/overview.ts` |
+| Gemini client (JSON via `responseSchema` + Zod) | `lib/gemini.ts` |
+| Extraction prompt + schema | `lib/prompts/extract.ts` |
+| Extract stage + startup merge/dedupe | `lib/pipeline/extract.ts` |
+| Facts normalisation (stages, FX, merge) | `lib/qualification/facts.ts` |
+| Hard gates G1–G5 (pure TypeScript) | `lib/qualification/gates.ts` |
+| Qualify stage + `qualification_log` | `lib/pipeline/qualify.ts` |
+| Demo data → articles, demo reset | `lib/demo.ts`, `lib/pipeline/demo-reset.ts`, `scripts/seed-demo.ts` |
+| Tests | `tests/qualification.test.ts` |
 | "Run pipeline now" | `components/shell/run-pipeline-button.tsx` → `app/api/pipeline/run` |
 
 ## Decisions and notes
@@ -77,3 +93,11 @@ Secrets live only in `.env.local` (git-ignored) and Vercel environment variables
 - **Investor portfolio diff.** Each portfolio page is read through Jina Reader, and company identifiers are taken from the links on it (external domains, or single-path slugs on the investor's own site). The first read is a baseline. After that, newly listed companies become `portfolio` articles. Inflection Point Ventures' page renders its portfolio client-side, so its snapshot only captures navigation links. 100X.VC's portfolio URL returns 404, so it is deactivated rather than deleted.
 - **Missing API keys.** A source whose key isn't set (GNews, NewsData) is counted as `sources_skipped`, not as a failure.
 - **Cron route shape.** One dynamic route, `app/api/cron/[stage]`, serves `/api/cron/ingest`, `/api/cron/extract`, and so on. Each checks `Authorization: Bearer $CRON_SECRET`. "Run pipeline now" calls the stages in-process, so the secret never reaches the browser.
+- **Model.** `GEMINI_MODEL=gemini-3.8-flash`, the newest Flash model on the account. The code default is the same if the env var is empty.
+- **Extraction fields.** The output contains every field from `qualification.md` §8. Amounts are extracted in their stated currency and converted to USD in code, using `inr_per_usd` and `fx_per_usd` from config. A few extra facts are extracted so the gates can stay in code: `instrument`, `raiser_type`, `is_exit_event`, `is_traditional_sme`, `serial_founder_with_exit`, `excluded_sector_match` and `founder_quotes`. Gemini never outputs accept or reject.
+- **Excluded sectors.** The live excluded-sector list from the `thesis` row is passed into the extraction prompt. Gemini names the matching list item, and the code rejects only if that item is still on the live list.
+- **Multi-company articles.** A roundup that covers several rounds yields one announcement per company. Each company is merged into its startup row, matched by root domain, then normalised name, then the same first word with the same round amount (±5%, within 7 days).
+- **Mixed equity + debt rounds** are rejected as `REJ_NON_EQUITY`, because acceptance criterion 1 requires an equity or convertible round. This is configurable through `reject_mixed_debt_rounds`.
+- **"Name + (domain or founder)".** If neither a domain nor a founder is known after extraction, the startup is flagged `identity_to_enrich`, and `REJ_UNIDENTIFIABLE` is applied only if research can't find one. Generic names such as "a stealth startup" are rejected immediately.
+- **Demo clock.** Demo-only startups are gated against a fixed date: the day after the latest demo announcement, stored as `app_settings.demo_reference_date`. This keeps their recency decisions stable whenever the demo is replayed. All demo companies are also in live news (the Inc42 roundup was ingested from RSS), so most become live leads and use the real clock.
+- **Time budget.** The extract stage stops starting new Gemini batches after 200 s. Leftover articles stay `new` and are picked up by the next run.

@@ -22,6 +22,11 @@ const EXTRA_CONFIG: { key: string; value: unknown; description: string }[] = [
   { key: "small_round_proxy_usd", value: 3000000, description: "Round size at or below which team size is assumed small (section 4c)" },
   { key: "flag_stages", value: ["pre-series a"], description: "Accepted stages that get the check_stage flag" },
   {
+    key: "reject_mixed_debt_rounds",
+    value: true,
+    description: "Reject rounds that mix equity and debt (acceptance criterion 1 requires an equity/convertible round)",
+  },
+  {
     key: "fx_per_usd",
     value: { INR: 85, EUR: 0.92, GBP: 0.79, SGD: 1.35, AED: 3.67 },
     description: "Fixed FX rates (units per USD); INR mirrors inr_per_usd",

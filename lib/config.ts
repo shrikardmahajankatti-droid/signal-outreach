@@ -25,6 +25,7 @@ export type QualificationConfig = {
   bonus_serial_founder: number
   small_round_proxy_usd: number
   flag_stages: string[]
+  reject_mixed_debt_rounds: boolean
   fx_per_usd: Record<string, number>
 }
 

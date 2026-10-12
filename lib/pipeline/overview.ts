@@ -1,4 +1,4 @@
-import { desc, eq, gte, sql } from "drizzle-orm"
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm"
 import { getDb, schema } from "@/db"
 
 export type StageKey =
@@ -41,15 +41,44 @@ export async function getPipelineOverview(): Promise<StageOverview[]> {
   const db = getDb()
   const today = startOfTodayIST()
 
-  const [[{ n: articlesToday }], recentArticles, ingestRun] = await Promise.all([
-    db.select({ n: sql<number>`count(*)::int` }).from(schema.articles).where(gte(schema.articles.createdAt, today)),
-    db
-      .select({ title: schema.articles.title, url: schema.articles.url, source: schema.articles.source, status: schema.articles.status })
-      .from(schema.articles)
-      .orderBy(desc(schema.articles.createdAt))
-      .limit(25),
-    lastRun("ingest"),
-  ])
+  const [[{ n: articlesToday }], recentArticles, ingestRun, extractRun, qualifyRun, [{ n: extractedToday }], extractedItems, [{ n: gateToday }], gateItems] =
+    await Promise.all([
+      db.select({ n: sql<number>`count(*)::int` }).from(schema.articles).where(gte(schema.articles.createdAt, today)),
+      db
+        .select({ title: schema.articles.title, url: schema.articles.url, source: schema.articles.source, status: schema.articles.status })
+        .from(schema.articles)
+        .orderBy(desc(schema.articles.createdAt))
+        .limit(25),
+      lastRun("ingest"),
+      lastRun("extract"),
+      lastRun("qualify"),
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.articles)
+        .where(and(eq(schema.articles.status, "extracted"), gte(schema.articles.updatedAt, today))),
+      db
+        .select({ title: schema.articles.title, url: schema.articles.url, status: schema.articles.status, error: schema.articles.error })
+        .from(schema.articles)
+        .where(inArray(schema.articles.status, ["extracted", "not_funding", "error"]))
+        .orderBy(desc(schema.articles.updatedAt))
+        .limit(25),
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.qualificationLog)
+        .where(and(eq(schema.qualificationLog.phase, "gate"), gte(schema.qualificationLog.createdAt, today))),
+      db
+        .select({
+          name: schema.startups.name,
+          decision: schema.qualificationLog.decision,
+          codes: schema.qualificationLog.reasonCodes,
+          flags: schema.qualificationLog.flags,
+        })
+        .from(schema.qualificationLog)
+        .innerJoin(schema.startups, eq(schema.startups.id, schema.qualificationLog.startupId))
+        .where(eq(schema.qualificationLog.phase, "gate"))
+        .orderBy(desc(schema.qualificationLog.createdAt))
+        .limit(30),
+    ])
 
   const empty = (key: StageKey): StageOverview => ({ key, count: null, lastRun: null, items: [] })
   return [
@@ -60,8 +89,25 @@ export async function getPipelineOverview(): Promise<StageOverview[]> {
       lastRun: ingestRun,
       items: recentArticles.map((a) => ({ title: a.title, subtitle: a.source, href: a.url, status: a.status })),
     },
-    empty("extract"),
-    empty("qualify"),
+    {
+      key: "extract",
+      count: extractedToday,
+      lastRun: extractRun,
+      items: extractedItems.map((a) => ({
+        title: a.title,
+        subtitle: a.status === "not_funding" ? `not funding${a.error ? `: ${a.error}` : ""}` : a.status === "error" ? `error: ${a.error ?? ""}` : "funding news",
+        href: a.url,
+      })),
+    },
+    {
+      key: "qualify",
+      count: gateToday,
+      lastRun: qualifyRun,
+      items: gateItems.map((g) => ({
+        title: g.name,
+        subtitle: [g.decision, ...g.codes].join(" · ") + (g.flags.length ? ` · flags: ${g.flags.join(", ")}` : ""),
+      })),
+    },
     empty("enrich"),
     empty("score-draft"),
     empty("sync"),
