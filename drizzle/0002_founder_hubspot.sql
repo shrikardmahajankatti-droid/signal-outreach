@@ -1,0 +1,1 @@
+ALTER TABLE "founders" ADD COLUMN "hubspot_contact_id" text;

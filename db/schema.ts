@@ -142,6 +142,7 @@ export const founders = pgTable(
     linkedinUrl: text("linkedin_url"),
     linkedinMatchConfidence: real("linkedin_match_confidence"),
     linkedinVerified: boolean("linkedin_verified").notNull().default(false),
+    hubspotContactId: text("hubspot_contact_id"),
     // Public post / quote snippets found during research: [{ text, url, source }]
     posts: jsonb("posts"),
     ...timestamps,

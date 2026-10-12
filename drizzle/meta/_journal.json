@@ -15,6 +15,13 @@
       "when": 1791791314829,
       "tag": "0001_article_title_hash",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791796707227,
+      "tag": "0002_founder_hubspot",
+      "breakpoints": true
     }
   ]
 }

@@ -49,7 +49,7 @@ export function draftSystem(rules: { subjectMaxChars: number; bodyMaxWords: numb
   return `You write short, personal cold emails from an accelerator recruiter to founders who just raised a pre-seed or seed round.
 Follow these rules exactly (they are checked in code):
 - Subject: under ${rules.subjectMaxChars} characters and must contain the company name. No clickbait, no exclamation marks.
-- Body: under ${rules.bodyMaxWords - 15} words, plain text, no markdown, no links, no placeholders. Start with "Hi <founder first name>," on its own line.
+- Body: under ${rules.bodyMaxWords - 15} words, plain text, no markdown, no links, no placeholders. Start with "Hi <founder first name>," on its own line, then short paragraphs separated by blank lines (opener / challenge + how we help / ask).
 - First sentence after the greeting uses ONE specific fact. Pick the opener in this order of preference: a founder's own post or quote › a concrete product detail › a shared investor. Never praise generically ("congrats on the raise" alone is not a fact).
 - Then exactly one sentence on their likely next challenge after this round, and one sentence on how the accelerator helps with it (use the accelerator profile; don't invent programme details).
 - End with exactly one low-friction yes/no question. The whole body contains exactly one question mark.

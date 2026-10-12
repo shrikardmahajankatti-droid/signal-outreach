@@ -1,12 +1,7 @@
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { Sidebar } from "@/components/shell/sidebar"
-import { Topbar } from "@/components/shell/topbar"
-import { MobileNav } from "@/components/shell/mobile-nav"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { isDemoMode } from "@/lib/env"
-import { pendingDraftCount } from "@/lib/queries"
 
 export const dynamic = "force-dynamic"
 
@@ -17,23 +12,12 @@ export const metadata: Metadata = {
   description: "Timed funding outreach engine for early-stage startups",
 }
 
-export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const pendingDrafts = await pendingDraftCount()
+// Root layout stays bare so public pages (unsubscribe) never show the internal app shell.
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={inter.variable}>
       <body>
-        <TooltipProvider>
-          <div className="flex min-h-screen">
-            <Sidebar pendingDrafts={pendingDrafts} />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <Topbar demoMode={isDemoMode()} />
-              <MobileNav />
-              <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-6 md:px-8 md:py-8">
-                {children}
-              </main>
-            </div>
-          </div>
-        </TooltipProvider>
+        <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>
   )

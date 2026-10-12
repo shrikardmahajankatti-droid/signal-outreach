@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs"
 import { eq, sql } from "drizzle-orm"
 import { getDb, schema } from "../db"
 import { parseQualificationMd } from "../lib/qualification/parse-md"
+import { ensureDealProperties, ensurePipeline, fetchAccount } from "../lib/hubspot"
 
 const force = process.argv.includes("--force")
 
@@ -172,8 +173,20 @@ async function main() {
   const [{ n: investorCount }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.investors)
   console.log(`app_settings ensured · sources: ${sourceCount} · investors: ${investorCount}`)
 
-  // HubSpot pipeline creation is added in Phase 7 (needs HUBSPOT_ACCESS_TOKEN).
-  if (!process.env.HUBSPOT_ACCESS_TOKEN) console.log("hubspot: skipped (HUBSPOT_ACCESS_TOKEN not set)")
+  // HubSpot: "Accelerator Outreach" deal pipeline + Signal deal properties.
+  if (!process.env.HUBSPOT_ACCESS_TOKEN) {
+    console.log("hubspot: skipped (HUBSPOT_ACCESS_TOKEN not set)")
+  } else {
+    const [pipeline, account] = await Promise.all([ensurePipeline(), fetchAccount()])
+    await ensureDealProperties()
+    for (const [key, value] of [["hubspot_pipeline", pipeline], ["hubspot_account", account]] as const) {
+      await db
+        .insert(schema.appSettings)
+        .values({ key, value })
+        .onConflictDoUpdate({ target: schema.appSettings.key, set: { value } })
+    }
+    console.log(`hubspot: pipeline "${"Accelerator Outreach"}" ${pipeline.pipelineId} with ${Object.keys(pipeline.stages).length} stages`)
+  }
 }
 
 main().catch((err) => {

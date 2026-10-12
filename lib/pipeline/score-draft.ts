@@ -19,6 +19,7 @@ import {
 import { FACTORS, SCORE_SYSTEM, buildScorePrompt, scoreResponseSchema, scoreZod, type Factor } from "@/lib/prompts/score"
 import type { Facts } from "@/lib/qualification/facts"
 import { unsubscribeUrl } from "@/lib/unsubscribe"
+import { syncPendingToHubSpot } from "@/lib/outreach"
 import { renderFooter, validateEmail, withFooter, type EmailValidation } from "@/lib/validateEmail"
 import type { Research } from "./enrich"
 import type { StageResult } from "./runs"
@@ -298,7 +299,10 @@ export async function runScoreDraft(runId?: number, deadline = Date.now() + TIME
       }
     })
   )
-  return { counts, errors }
+  // Step 7: save is done; push drafted startups to HubSpot at "Draft ready".
+  const sync = await syncPendingToHubSpot()
+  errors.push(...sync.errors)
+  return { counts: { ...counts, hubspot_synced: sync.synced }, errors }
 }
 
 // Regenerates the pending draft for one startup (editor "Regenerate", or after prompt changes).
